@@ -6,6 +6,7 @@ import dotenv from 'dotenv'
 import authRoutes from './routes/auth.js'
 import articleRoutes from './routes/articles.js'
 import analyticsRoutes from './routes/analytics.js'
+import chatRoutes from './routes/chat.js'
 
 // Import middleware
 import { requireAuth, optionalAuth } from './middleware/auth.js'
@@ -108,6 +109,7 @@ app.get('/health', async (req, res) => {
 app.use('/api/auth', authRoutes)
 app.use('/api/articles', articleRoutes)
 app.use('/api/analytics', analyticsRoutes)
+app.use('/api/chat', chatRoutes)
 
 // API information endpoint
 app.get('/api', (req, res) => {
@@ -138,6 +140,11 @@ app.get('/api', (req, res) => {
         insights: 'GET /api/analytics/insights (protected)',
         popular: 'GET /api/analytics/popular (protected)',
         clearHistory: 'DELETE /api/analytics/history (protected)'
+      },
+      chat: {
+        chat: 'POST /api/chat/chat (protected)',
+        history: 'GET /api/chat/history (protected)',
+        clearHistory: 'DELETE /api/chat/history (protected)'
       }
     },
     documentation: {
@@ -171,7 +178,10 @@ app.use('*', (req, res) => {
         'GET /api/articles/cache/status',
         'GET /api/analytics/history',
         'GET /api/analytics/insights',
-        'GET /api/analytics/popular'
+        'GET /api/analytics/popular',
+        'POST /api/chat/chat',
+        'GET /api/chat/history',
+        'DELETE /api/chat/history'
       ]
     },
     hint: 'Check the API documentation at GET /api for available endpoints'
@@ -240,6 +250,9 @@ app.listen(PORT, async () => {
   console.log(`   • GET  /api/articles/search - Search knowledge base (protected)`)
   console.log(`   • GET  /api/articles/:id    - Get specific article (protected)`)
   console.log(`   • GET  /api/articles/categories - List categories (protected)`)
+  console.log(`   • POST /api/chat/chat       - Chat with AI assistant (protected)`)
+  console.log(`   • GET  /api/chat/history    - Get chat history (protected)`)
+  console.log(`   • DELETE /api/chat/history  - Clear chat history (protected)`)
   console.log('\n💡 Ready to accept requests!')
   
   if (NODE_ENV === 'development') {

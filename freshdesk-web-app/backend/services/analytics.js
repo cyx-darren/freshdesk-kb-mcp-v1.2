@@ -356,6 +356,65 @@ class AnalyticsService {
   }
 
   /**
+   * Save chat history entry
+   * @param {string} userId - User ID
+   * @param {string} userMessage - User's message
+   * @param {string} assistantResponse - Assistant's response
+   * @param {number} articlesFound - Number of knowledge base articles found
+   * @param {number} responseTime - Response time in milliseconds
+   * @param {object} metadata - Additional metadata (optional)
+   * @returns {Promise<boolean>} - Success status
+   */
+  async saveChatHistory(userId, userMessage, assistantResponse, articlesFound = 0, responseTime = 0, metadata = {}) {
+    try {
+      if (!userId || !userMessage || !assistantResponse) {
+        console.warn('[ANALYTICS] Missing required fields for chat history')
+        return false
+      }
+
+      console.log(`[ANALYTICS] Saving chat history for user ${userId}`)
+
+      const chatEntry = {
+        user_id: userId,
+        user_message: userMessage.trim(),
+        assistant_response: assistantResponse.trim(),
+        articles_found: articlesFound || 0,
+        response_time_ms: responseTime || 0,
+        metadata: {
+          timestamp: new Date().toISOString(),
+          message_length: userMessage.trim().length,
+          response_length: assistantResponse.trim().length,
+          has_articles: articlesFound > 0,
+          ...metadata
+        },
+        timestamp: new Date().toISOString()
+      }
+
+      // Note: This assumes a 'chat_history' table exists
+      // If it doesn't exist, this will fail gracefully
+      const { error } = await supabase
+        .from('chat_history')
+        .insert([chatEntry])
+
+      if (error) {
+        // Don't throw error if table doesn't exist - just log and continue
+        if (error.code === '42P01') { // Table doesn't exist
+          console.warn('[ANALYTICS] Chat history table does not exist, skipping chat analytics')
+          return false
+        }
+        throw new Error(`Chat history save error: ${error.message}`)
+      }
+
+      console.log(`[ANALYTICS] Successfully saved chat history for user ${userId}`)
+      return true
+
+    } catch (error) {
+      console.error(`[ANALYTICS] Error saving chat history:`, error.message)
+      return false // Return false but don't throw - analytics should not break main flow
+    }
+  }
+
+  /**
    * Schedule periodic cleanup of old search history
    * @param {number} intervalHours - Cleanup interval in hours (default: 24)
    * @param {number} maxAgeDays - Maximum age in days (default: 90)
