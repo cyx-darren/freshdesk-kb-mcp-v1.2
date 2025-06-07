@@ -1,5 +1,7 @@
 # Dependencies
 node_modules/
+.pnp
+.pnp.js
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
@@ -72,4 +74,11 @@ jspm_packages/
 .vuepress/dist
 
 # Serverless directories
-.serverless 
+.serverless
+
+# Build outputs
+build/
+dist/
+
+# Testing
+coverage/
