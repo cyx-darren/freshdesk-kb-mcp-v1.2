@@ -409,30 +409,105 @@ server.tool(
         // Query-based search: use search endpoint
         searchType = 'query';
         apiUrl = `https://${FRESHDESK_DOMAIN}/api/v2/search/solutions`;
-        params = {
-          term: query, // Note: search endpoint uses 'term' not 'query'
-          page: page,
-          per_page: per_page
-        };
         
-        console.error(`🔍 Searching Freshdesk: "${query}" (page: ${page})`);
-        
-        // Make the API call with proper authentication
-        const searchResponse = await axios.get(apiUrl, {
-          params: params,
-          auth: {
-            username: FRESHDESK_API_KEY,
-            password: 'X'
-          },
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          timeout: 10000 // 10 second timeout
-        });
+        // Check if we need to fetch multiple pages (when per_page > 30)
+        if (per_page > 30 && page === 1) {
+          console.error(`🔍 Multi-page search for "${query}" - requested ${per_page} results (max 30 per API page)`);
+          
+          // Initialize arrays to collect all results
+          let allSolutions = [];
+          let currentPage = 1;
+          let totalFetched = 0;
+          let hasMorePages = true;
+          
+          // Fetch pages until we have enough results or reach the end
+          while (hasMorePages && totalFetched < per_page) {
+            const pageParams = {
+              term: query,
+              page: currentPage,
+              per_page: 30 // Freshdesk API limit per page
+            };
+            
+            console.error(`🔍 Fetching page ${currentPage} for "${query}"`);
+            
+            try {
+              const pageResponse = await axios.get(apiUrl, {
+                params: pageParams,
+                auth: {
+                  username: FRESHDESK_API_KEY,
+                  password: 'X'
+                },
+                headers: {
+                  'Content-Type': 'application/json'
+                },
+                timeout: 10000 // 10 second timeout
+              });
+              
+              const pageResults = pageResponse.data;
+              
+              if (!pageResults || !Array.isArray(pageResults) || pageResults.length === 0) {
+                // No more results on this page
+                hasMorePages = false;
+                console.error(`📄 Page ${currentPage} returned no results - stopping`);
+              } else {
+                // Add results from this page
+                allSolutions = allSolutions.concat(pageResults);
+                totalFetched += pageResults.length;
+                console.error(`📄 Page ${currentPage} returned ${pageResults.length} results (total: ${totalFetched})`);
+                
+                // Check if this page returned less than 30 results (indicates last page)
+                if (pageResults.length < 30) {
+                  hasMorePages = false;
+                  console.error(`📄 Page ${currentPage} returned ${pageResults.length} < 30 results - this is the last page`);
+                }
+                
+                currentPage++;
+              }
+            } catch (pageError) {
+              console.error(`❌ Error fetching page ${currentPage}:`, pageError.message);
+              hasMorePages = false;
+            }
+          }
+          
+          // Create mock response object with aggregated results
+          response = {
+            data: allSolutions,
+            headers: {
+              'x-total-count': allSolutions.length,
+              'x-total-pages': 1 // We're showing all results on one "virtual" page
+            }
+          };
+          solutions = allSolutions;
+          
+          console.error(`✅ Multi-page search complete: fetched ${allSolutions.length} total results from ${currentPage - 1} pages`);
+          
+        } else {
+          // Single page request or specific page > 1
+          params = {
+            term: query, // Note: search endpoint uses 'term' not 'query'
+            page: page,
+            per_page: Math.min(per_page, 30) // Cap at 30 per Freshdesk API limit
+          };
+          
+          console.error(`🔍 Searching Freshdesk: "${query}" (page: ${page})`);
+          
+          // Make the API call with proper authentication
+          const searchResponse = await axios.get(apiUrl, {
+            params: params,
+            auth: {
+              username: FRESHDESK_API_KEY,
+              password: 'X'
+            },
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            timeout: 10000 // 10 second timeout
+          });
 
-        // Create response object for compatibility
-        response = searchResponse;
-        solutions = response.data;
+          // Create response object for compatibility
+          response = searchResponse;
+          solutions = response.data;
+        }
       }
 
       // Check if we got results
