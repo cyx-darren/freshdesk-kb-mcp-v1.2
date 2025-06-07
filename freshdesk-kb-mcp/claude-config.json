@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "freshdesk-mcp": {
+      "command": "node",
+      "args": ["/Users/darrenchoong/Desktop/cursor projects/freshdesk-kb-mcp/src/index.js"],
+      "env": {
+        "FRESHDESK_DOMAIN": "easyprint.freshdesk.com",
+        "FRESHDESK_API_KEY": "wk02dODbfqdvT8m7eVSO"
+      }
+    }
+  }
+}
