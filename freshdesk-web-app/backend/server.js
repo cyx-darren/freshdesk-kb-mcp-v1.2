@@ -23,16 +23,17 @@ dotenv.config()
 const app = express()
 
 // Get configuration from environment variables
-const PORT = process.env.PORT || 3001
+const PORT = process.env.PORT || 3333
 const NODE_ENV = process.env.NODE_ENV || 'development'
-const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173' // Vite default port
+const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000' // Updated to 3000
 
 // Middleware
 // Enable CORS for frontend
 app.use(cors({
   origin: [
     FRONTEND_URL,
-    'http://localhost:3000', // Create React App default
+    'http://localhost:3000', // Vite frontend
+    'http://localhost:3001', // Alternative port
     'http://localhost:5173', // Vite default
     'http://localhost:4173'  // Vite preview
   ],

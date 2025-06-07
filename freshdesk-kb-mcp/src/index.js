@@ -483,30 +483,30 @@ server.tool(
           
         } else {
           // Single page request or specific page > 1
-          params = {
-            term: query, // Note: search endpoint uses 'term' not 'query'
-            page: page,
+        params = {
+          term: query, // Note: search endpoint uses 'term' not 'query'
+          page: page,
             per_page: Math.min(per_page, 30) // Cap at 30 per Freshdesk API limit
-          };
-          
-          console.error(`🔍 Searching Freshdesk: "${query}" (page: ${page})`);
-          
-          // Make the API call with proper authentication
-          const searchResponse = await axios.get(apiUrl, {
-            params: params,
-            auth: {
-              username: FRESHDESK_API_KEY,
-              password: 'X'
-            },
-            headers: {
-              'Content-Type': 'application/json'
-            },
-            timeout: 10000 // 10 second timeout
-          });
+        };
+        
+        console.error(`🔍 Searching Freshdesk: "${query}" (page: ${page})`);
+        
+        // Make the API call with proper authentication
+        const searchResponse = await axios.get(apiUrl, {
+          params: params,
+          auth: {
+            username: FRESHDESK_API_KEY,
+            password: 'X'
+          },
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          timeout: 10000 // 10 second timeout
+        });
 
-          // Create response object for compatibility
-          response = searchResponse;
-          solutions = response.data;
+        // Create response object for compatibility
+        response = searchResponse;
+        solutions = response.data;
         }
       }
 
