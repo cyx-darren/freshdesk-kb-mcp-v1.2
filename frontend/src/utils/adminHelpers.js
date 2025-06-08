@@ -21,7 +21,9 @@ export const useAdminHelpers = () => {
       'support@yourcompany.com',
       // For development/testing - you can add your email here
       'test@example.com',
-      'admin@test.com'
+      'admin@test.com',
+      // Add your actual email here (replace with your real email)
+      'darren@easyprintsg.com'  // Replace this with your actual email
     ]
     
     return adminEmails.includes(user.email)

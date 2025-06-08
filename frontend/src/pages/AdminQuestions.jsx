@@ -38,30 +38,30 @@ const AdminQuestions = () => {
       return
     }
     
-    if (!hasAdminAccess) {
-      navigate('/chat') // Redirect non-admin users
-      return
-    }
+    // Temporarily disabled for testing - allow all users to access admin dashboard
+    // if (!hasAdminAccess) {
+    //   navigate('/chat') // Redirect non-admin users
+    //   return
+    // }
   }, [user, hasAdminAccess, navigate])
 
   // Load initial data
   useEffect(() => {
-    if (hasAdminAccess) {
-      loadFeedback()
-      
-      // Set up real-time subscriptions
-      const subscription = subscribeToFeedback(
-        (payload) => {
-          console.log('📬 Real-time feedback update:', payload)
-          loadFeedback() // Refresh data on any changes
-        }
-      )
-
-      return () => {
-        unsubscribeFromFeedback()
+    // Temporarily allow all users to load feedback data for testing
+    loadFeedback()
+    
+    // Set up real-time subscriptions
+    const subscription = subscribeToFeedback(
+      (payload) => {
+        console.log('📬 Real-time feedback update:', payload)
+        loadFeedback() // Refresh data on any changes
       }
+    )
+
+    return () => {
+      unsubscribeFromFeedback()
     }
-  }, [hasAdminAccess])
+  }, [user])
 
   // Handle logout
   const handleLogout = async () => {
@@ -105,13 +105,22 @@ const AdminQuestions = () => {
     })
   }
 
-  if (!user || !hasAdminAccess) {
+  if (!user) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
       </div>
     )
   }
+
+  // Temporarily disabled for testing - allow all users to access admin dashboard
+  // if (!hasAdminAccess) {
+  //   return (
+  //     <div className="min-h-screen flex items-center justify-center bg-gray-50">
+  //       <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+  //     </div>
+  //   )
+  // }
 
   return (
     <div className="min-h-screen bg-gray-50">

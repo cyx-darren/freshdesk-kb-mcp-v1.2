@@ -183,7 +183,7 @@ const Chat = () => {
 
               {/* Test Admin Link - Shows for everyone during development */}
               <button
-                onClick={() => navigate('/admin/questions')}
+                onClick={() => navigate('/admin/test')}
                 className="px-3 py-2 md:px-4 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors text-xs md:text-sm"
                 title="Test Admin Dashboard (Everyone can access)"
               >
