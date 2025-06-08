@@ -8,14 +8,14 @@ function App() {
   return (
     <BrowserRouter>
       <SupabaseProvider>
-        <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-gray-50">
           <Routes>
             <Route path="/" element={<Navigate to="/login" replace />} />
             <Route path="/login" element={<Login />} />
             <Route path="/chat" element={<Chat />} />
             <Route path="*" element={<Navigate to="/login" replace />} />
           </Routes>
-        </div>
+          </div>
       </SupabaseProvider>
     </BrowserRouter>
   )

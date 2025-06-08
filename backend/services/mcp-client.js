@@ -2,6 +2,7 @@ import { spawn, execSync } from 'child_process'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import dotenv from 'dotenv'
+import axios from 'axios'
 
 // Load environment variables
 dotenv.config()
@@ -14,26 +15,34 @@ const __dirname = path.dirname(__filename)
  */
 class MCPClient {
   constructor() {
-    // Get MCP server path from environment variable
+    // Get MCP server configuration
     this.mcpServerPath = process.env.MCP_SERVER_PATH || '../freshdesk-kb-mcp'
+    this.mcpServerUrl = process.env.MCP_SERVER_URL
+    this.nodeEnv = process.env.NODE_ENV || 'development'
     
     // Resolve the absolute path - the MCP server is in the same parent directory as freshdesk-web-app
     this.absoluteMcpPath = path.resolve(__dirname, '../../../freshdesk-kb-mcp')
     
-    // Get the full path to node
-    try {
-      this.nodePath = execSync('which node').toString().trim()
-    } catch (error) {
-      // Fallback for common node locations
-      this.nodePath = process.execPath || '/usr/local/bin/node'
+    // Get the full path to node (only needed for stdio mode)
+    if (this.nodeEnv !== 'production') {
+      try {
+        this.nodePath = execSync('which node').toString().trim()
+      } catch (error) {
+        // Fallback for common node locations
+        this.nodePath = process.execPath || '/usr/local/bin/node'
+      }
+      console.log('[MCP CLIENT] Using node path:', this.nodePath)
     }
-    console.log('[MCP CLIENT] Using node path:', this.nodePath)
     
     // Configuration
     this.timeout = 30000 // 30 seconds timeout
     this.maxRetries = 3
     
-    console.log(`[MCP CLIENT] Initialized with path: ${this.absoluteMcpPath}`)
+    if (this.nodeEnv === 'production') {
+      console.log(`[MCP CLIENT] Initialized in HTTP mode with URL: ${this.mcpServerUrl}`)
+    } else {
+      console.log(`[MCP CLIENT] Initialized in stdio mode with path: ${this.absoluteMcpPath}`)
+    }
   }
 
   /**
@@ -43,6 +52,79 @@ class MCPClient {
    * @returns {Promise<object>} - MCP response
    */
   async callFunction(method, params = {}) {
+    if (this.nodeEnv === 'production') {
+      return this.callFunctionHTTP(method, params)
+    } else {
+      return this.callFunctionStdio(method, params)
+    }
+  }
+
+  /**
+   * Call MCP server via HTTP (production mode)
+   * @param {string} method - MCP method name
+   * @param {object} params - Method parameters
+   * @returns {Promise<object>} - MCP response
+   */
+  async callFunctionHTTP(method, params = {}) {
+    if (!this.mcpServerUrl) {
+      throw new Error('MCP_SERVER_URL environment variable is required in production mode')
+    }
+
+    let retryCount = 0
+    
+    const attemptCall = async () => {
+      try {
+        console.log(`[MCP-HTTP] Calling ${method} with params:`, params)
+        
+        const response = await axios.post(`${this.mcpServerUrl}/execute`, {
+          tool: method,
+          params: params
+        }, {
+          timeout: this.timeout,
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        })
+
+        if (response.data.success) {
+          return response.data.result
+        } else if (response.data.error) {
+          throw new Error(`MCP Error: ${response.data.message || response.data.error}`)
+        } else {
+          throw new Error('Unknown MCP response format')
+        }
+        
+      } catch (error) {
+        console.error(`[MCP-HTTP] Error calling ${method}:`, error.message)
+        
+        // Retry on network errors or timeouts
+        if ((error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT' || error.response?.status >= 500) 
+            && retryCount < this.maxRetries) {
+          retryCount++
+          console.log(`[MCP-HTTP] Retrying ${method} (attempt ${retryCount}/${this.maxRetries})`)
+          await new Promise(resolve => setTimeout(resolve, 1000 * retryCount))
+          return attemptCall()
+        }
+        
+        // Handle specific HTTP errors
+        if (error.response) {
+          throw new Error(`HTTP ${error.response.status}: ${error.response.data?.message || error.message}`)
+        }
+        
+        throw error
+      }
+    }
+
+    return attemptCall()
+  }
+
+  /**
+   * Call MCP server via stdio (development mode)
+   * @param {string} method - MCP method name
+   * @param {object} params - Method parameters
+   * @returns {Promise<object>} - MCP response
+   */
+  async callFunctionStdio(method, params = {}) {
     return new Promise((resolve, reject) => {
       let retryCount = 0
       
@@ -336,7 +418,8 @@ class MCPClient {
    */
   async testConnection() {
     try {
-      console.log('[MCP] Testing connection to MCP server')
+      const mode = this.nodeEnv === 'production' ? 'HTTP' : 'stdio'
+      console.log(`[MCP] Testing connection to MCP server (${mode} mode)`)
       
       const startTime = Date.now()
       
@@ -348,8 +431,10 @@ class MCPClient {
       return {
         success: true,
         status: 'connected',
+        mode: mode.toLowerCase(),
         responseTime: duration,
-        mcpPath: this.absoluteMcpPath,
+        mcpUrl: this.nodeEnv === 'production' ? this.mcpServerUrl : undefined,
+        mcpPath: this.nodeEnv !== 'production' ? this.absoluteMcpPath : undefined,
         timestamp: new Date().toISOString()
       }
       
@@ -359,8 +444,10 @@ class MCPClient {
       return {
         success: false,
         status: 'disconnected',
+        mode: this.nodeEnv === 'production' ? 'http' : 'stdio',
         error: error.message,
-        mcpPath: this.absoluteMcpPath,
+        mcpUrl: this.nodeEnv === 'production' ? this.mcpServerUrl : undefined,
+        mcpPath: this.nodeEnv !== 'production' ? this.absoluteMcpPath : undefined,
         timestamp: new Date().toISOString()
       }
     }
@@ -371,12 +458,17 @@ class MCPClient {
    * @returns {object} - Health information
    */
   getHealthStatus() {
+    const isProduction = this.nodeEnv === 'production'
+    
     return {
-      mcpServerPath: this.mcpServerPath,
-      absoluteMcpPath: this.absoluteMcpPath,
+      mode: isProduction ? 'http' : 'stdio',
+      mcpServerUrl: isProduction ? this.mcpServerUrl : undefined,
+      mcpServerPath: !isProduction ? this.mcpServerPath : undefined,
+      absoluteMcpPath: !isProduction ? this.absoluteMcpPath : undefined,
       timeout: this.timeout,
       maxRetries: this.maxRetries,
-      configured: !!this.mcpServerPath,
+      configured: isProduction ? !!this.mcpServerUrl : !!this.mcpServerPath,
+      environment: this.nodeEnv,
       timestamp: new Date().toISOString()
     }
   }

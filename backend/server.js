@@ -26,21 +26,64 @@ const app = express()
 // Get configuration from environment variables
 const PORT = process.env.PORT || 3333
 const NODE_ENV = process.env.NODE_ENV || 'development'
-const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000' // Updated to 3000
+const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000'
+
+// Production logging setup
+if (NODE_ENV === 'production') {
+  console.log('🏭 Production Mode Initialized')
+  console.log(`📡 Server Port: ${PORT}`)
+  console.log(`🔗 Frontend URL: ${FRONTEND_URL}`)
+}
 
 // Middleware
 // Enable CORS for frontend
-app.use(cors({
-  origin: [
-    FRONTEND_URL,
+const allowedOrigins = []
+
+// Add production frontend URL first
+if (FRONTEND_URL) {
+  allowedOrigins.push(FRONTEND_URL)
+  
+  // Add HTTPS version if not already HTTPS
+  if (FRONTEND_URL.startsWith('http://')) {
+    allowedOrigins.push(FRONTEND_URL.replace('http://', 'https://'))
+  }
+  // Add HTTP version if HTTPS (for local development)
+  if (FRONTEND_URL.startsWith('https://')) {
+    allowedOrigins.push(FRONTEND_URL.replace('https://', 'http://'))
+  }
+}
+
+// Add development origins only in development mode
+if (NODE_ENV === 'development') {
+  allowedOrigins.push(
     'http://localhost:3000', // Vite frontend
     'http://localhost:3001', // Alternative port
     'http://localhost:5173', // Vite default
     'http://localhost:4173'  // Vite preview
-  ],
+  )
+}
+
+app.use(cors({
+  origin: function(origin, callback) {
+    // Allow requests with no origin (mobile apps, Postman, etc.)
+    if (!origin) return callback(null, true)
+    
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true)
+    } else {
+      if (NODE_ENV === 'production') {
+        console.error(`🚫 CORS blocked origin: ${origin}`)
+        console.error(`🔗 Allowed origins: ${allowedOrigins.join(', ')}`)
+      } else {
+        console.warn(`CORS blocked origin: ${origin}`)
+      }
+      callback(new Error('Not allowed by CORS policy'))
+    }
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  exposedHeaders: ['Authorization']
 }))
 
 // Parse JSON bodies
@@ -52,7 +95,13 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }))
 // Add request logging middleware
 app.use((req, res, next) => {
   const timestamp = new Date().toISOString()
-  console.log(`[${timestamp}] ${req.method} ${req.path}`)
+  if (NODE_ENV === 'production') {
+    // Production logging - less verbose
+    console.log(`[${timestamp}] ${req.method} ${req.path} - ${req.ip || req.connection.remoteAddress}`)
+  } else {
+    // Development logging - more verbose
+    console.log(`[${timestamp}] ${req.method} ${req.path}`)
+  }
   next()
 })
 

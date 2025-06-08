@@ -1,17 +1,37 @@
 # Dependencies
 node_modules/
+*/node_modules/
 .pnp
 .pnp.js
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# Environment variables
+# Environment files
 .env
 .env.local
+.env.production
 .env.development.local
 .env.test.local
 .env.production.local
+*/.env
+*/.env.production
+*.env.production
+env.production
+
+# Build outputs
+build/
+dist/
+*/build/
+*/dist/
+.next
+.nuxt
+.vuepress/dist
+
+# Logs
+logs
+*.log
+npm-debug.log
 
 # IDE and editor files
 .vscode/
@@ -28,10 +48,6 @@ yarn-error.log*
 .Trashes
 ehthumbs.db
 Thumbs.db
-
-# Logs
-logs
-*.log
 
 # Runtime data
 pids
@@ -64,21 +80,8 @@ jspm_packages/
 .cache
 .parcel-cache
 
-# next.js build output
-.next
-
-# nuxt.js build output
-.nuxt
-
-# vuepress build output
-.vuepress/dist
-
 # Serverless directories
 .serverless
-
-# Build outputs
-build/
-dist/
 
 # Testing
 coverage/
