@@ -4,8 +4,25 @@ import { useNavigate } from 'react-router-dom'
 import { setNavigationFunction, setCurrentUser } from '../services/api.js'
 
 // Initialize Supabase client using environment variables
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://vcpwtrdrahsghenmgtgy.supabase.co'
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZjcHd0cmRyYWhzZ2hlbm1ndGd5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzI5Nzg3MjksImV4cCI6MjA0ODU1NDcyOX0.jVOBfuGm_cK8YFiOWOBQqmC1fHgzF8F_cGxiNQJoStHw'
+// Debug: Check what environment variables are being loaded
+console.log('=== Supabase Environment Debug ===')
+console.log('VITE_SUPABASE_URL:', import.meta.env.VITE_SUPABASE_URL)
+console.log('VITE_SUPABASE_ANON_KEY length:', import.meta.env.VITE_SUPABASE_ANON_KEY?.length)
+console.log('VITE_REACT_APP_SUPABASE_URL:', import.meta.env.VITE_REACT_APP_SUPABASE_URL)
+console.log('VITE_REACT_APP_SUPABASE_ANON_KEY length:', import.meta.env.VITE_REACT_APP_SUPABASE_ANON_KEY?.length)
+
+// Try both naming conventions (VITE_ and VITE_REACT_APP_)
+const supabaseUrl = import.meta.env.VITE_REACT_APP_SUPABASE_URL || 
+                   import.meta.env.VITE_SUPABASE_URL || 
+                   'https://vcpwtrdrahsghenmgtgy.supabase.co'
+
+const supabaseAnonKey = import.meta.env.VITE_REACT_APP_SUPABASE_ANON_KEY || 
+                       import.meta.env.VITE_SUPABASE_ANON_KEY || 
+                       'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZjcHd0cmRyYWhzZ2hlbm1ndGd5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzI5Nzg3MjksImV4cCI6MjA0ODU1NDcyOX0.jVOBfuGm_cK8YFiOWOBQqmC1fHgzF8F_cGxiNQJoStHw'
+
+console.log('Final Supabase URL:', supabaseUrl)
+console.log('Final Supabase Key length:', supabaseAnonKey?.length)
+console.log('=== End Debug ===');
 
 const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
