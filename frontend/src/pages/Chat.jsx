@@ -91,7 +91,8 @@ const Chat = () => {
         sender: 'ai',
         timestamp: new Date(),
         citations: response.citations || [],
-        status: 'success'
+        status: 'success',
+        originalQuestion: message // Add the original question that led to this response
       }
       
       setMessages(prev => [...prev, aiMessage])
