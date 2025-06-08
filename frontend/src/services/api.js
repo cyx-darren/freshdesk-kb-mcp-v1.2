@@ -1,7 +1,18 @@
 import axios from 'axios'
 
 // Get base URL from environment variable or fallback to localhost
-const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001'
+const BASE_URL = import.meta.env.VITE_API_URL || 
+                 import.meta.env.VITE_REACT_APP_API_URL || 
+                 import.meta.env.VITE_API_BASE_URL || 
+                 'http://localhost:3001'
+
+// Debug environment variables
+console.log('=== API Service Environment Debug ===')
+console.log('VITE_API_URL:', import.meta.env.VITE_API_URL)
+console.log('VITE_REACT_APP_API_URL:', import.meta.env.VITE_REACT_APP_API_URL)
+console.log('VITE_API_BASE_URL:', import.meta.env.VITE_API_BASE_URL)
+console.log('Final BASE_URL:', BASE_URL)
+console.log('=== End API Debug ===')
 
 // Create axios instance
 const api = axios.create({
