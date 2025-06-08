@@ -327,6 +327,43 @@ export const utils = {
   }
 }
 
+// Utility functions for API responses and error handling
+export const createApiResponse = (success, data = null, error = null, message = '') => {
+  return {
+    success,
+    data,
+    error,
+    message,
+    timestamp: new Date().toISOString()
+  }
+}
+
+export const handleApiCall = async (apiFunction, operationName = 'API call') => {
+  try {
+    console.log(`🔄 Starting ${operationName}...`)
+    const result = await apiFunction()
+    console.log(`✅ ${operationName} completed successfully`)
+    return createApiResponse(true, result.data, null, `${operationName} successful`)
+  } catch (error) {
+    console.error(`❌ ${operationName} failed:`, error)
+    
+    // Use existing utils.getErrorMessage for consistent error handling
+    const errorMessage = utils.getErrorMessage(error)
+    return createApiResponse(false, null, errorMessage, `${operationName} failed`)
+  }
+}
+
+export const buildQueryParams = (params = {}) => {
+  const filteredParams = Object.entries(params)
+    .filter(([key, value]) => value !== null && value !== undefined && value !== '')
+    .reduce((acc, [key, value]) => {
+      acc[key] = value
+      return acc
+    }, {})
+
+  return new URLSearchParams(filteredParams).toString()
+}
+
 // Export the configured axios instance as default
 export default api
 
