@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { useSupabase } from '../contexts/SupabaseContext.jsx'
 import { useNavigate } from 'react-router-dom'
+import { useAdminHelpers } from '../utils/adminHelpers.js'
 import { chatService, utils } from '../services/api.js'
 import ChatMessage from '../components/ChatMessage.jsx'
 import ChatInput from '../components/ChatInput.jsx'
@@ -18,6 +19,7 @@ const Chat = () => {
   
   const { user, logout } = useSupabase()
   const navigate = useNavigate()
+  const { hasAdminAccess } = useAdminHelpers()
 
   // Redirect to login if not authenticated
   useEffect(() => {
@@ -163,6 +165,19 @@ const Chat = () => {
             
             <div className="flex items-center space-x-2 md:space-x-4">
               <span className="text-sm text-gray-600 hidden lg:block">Welcome, {user.email}</span>
+              
+              {hasAdminAccess && (
+                <button
+                  onClick={() => navigate('/admin/questions')}
+                  className="px-3 py-2 md:px-4 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors text-xs md:text-sm"
+                  title="Admin Dashboard"
+                >
+                  <span className="hidden sm:inline">Admin</span>
+                  <svg className="w-4 h-4 sm:hidden" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </button>
+              )}
               
               {messages.length > 0 && (
                 <button

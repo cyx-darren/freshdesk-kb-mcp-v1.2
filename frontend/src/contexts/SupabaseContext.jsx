@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react'
 import { createClient } from '@supabase/supabase-js'
 import { useNavigate } from 'react-router-dom'
 import { setNavigationFunction, setCurrentUser } from '../services/api.js'
+import feedbackService from '../services/feedback.js'
 
 // Initialize Supabase client using environment variables
 // Debug: Check what environment variables are being loaded
@@ -25,6 +26,9 @@ console.log('Final Supabase Key length:', supabaseAnonKey?.length)
 console.log('=== End Debug ===');
 
 const supabase = createClient(supabaseUrl, supabaseAnonKey)
+
+// Initialize feedback service with Supabase client
+feedbackService.updateSupabaseClient(supabase)
 
 // Create context
 const SupabaseContext = createContext({})
@@ -221,9 +225,14 @@ export const SupabaseProvider = ({ children }) => {
     // Supabase client for direct access if needed
     supabase,
     
+    // Feedback service
+    feedbackService,
+    
     // Helper properties
     isAuthenticated: !!user,
     isLoading: loading,
+    userId: user?.id || null,
+    userEmail: user?.email || null,
   }
 
   return (
