@@ -1,38 +1,51 @@
 import axios from 'axios'
 
-// Base configuration
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3333/api'
+// Get base URL from environment variable or fallback to localhost
+const BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001'
 
 // Create axios instance
 const api = axios.create({
-  baseURL: API_BASE_URL,
-  timeout: 15000, // 15 second timeout
+  baseURL: BASE_URL,
+  timeout: 30000, // 30 seconds
   headers: {
     'Content-Type': 'application/json',
   },
 })
 
+// Auth token management
+let currentUser = null
+let navigate = null // Will be set by the auth context
+
+// Set navigation function for redirects
+export const setNavigationFunction = (navigateFunction) => {
+  navigate = navigateFunction
+}
+
+// Set current user for token access
+export const setCurrentUser = (user) => {
+  currentUser = user
+}
+
 // Request interceptor to add auth token
 api.interceptors.request.use(
   (config) => {
-    // Get Supabase token from localStorage
-    const supabaseSession = localStorage.getItem('sb-vcpwtrdrahsghenmgtgy-auth-token')
-    
-    if (supabaseSession) {
-      try {
-        const session = JSON.parse(supabaseSession)
-        const token = session?.access_token
-        
-        if (token) {
-          config.headers.Authorization = `Bearer ${token}`
-        }
-      } catch (error) {
-        console.warn('Failed to parse Supabase session:', error)
+    // Add auth token if available
+    if (currentUser?.access_token) {
+      config.headers.Authorization = `Bearer ${currentUser.access_token}`
+      
+      // Log token info in development (but not the full token for security)
+      if (import.meta.env.DEV) {
+        const tokenStart = currentUser.access_token.substring(0, 20)
+        console.log(`🔐 API Request with token: ${tokenStart}...`)
       }
+    } else {
+      console.warn('⚠️ API Request without token - user may not be authenticated')
     }
     
-    // Add request timestamp for debugging
-    config.metadata = { startTime: Date.now() }
+    // Log request in development
+    if (import.meta.env.DEV) {
+      console.log(`📡 API Request: ${config.method?.toUpperCase()} ${config.url}`)
+    }
     
     return config
   },
@@ -42,87 +55,272 @@ api.interceptors.request.use(
   }
 )
 
-// Response interceptor for error handling and logging
+// Response interceptor for error handling
 api.interceptors.response.use(
   (response) => {
-    // Calculate request duration
-    const duration = Date.now() - response.config.metadata.startTime
-    console.log(`✅ ${response.config.method?.toUpperCase()} ${response.config.url} - ${response.status} (${duration}ms)`)
+    // Log successful response in development
+    if (import.meta.env.DEV) {
+      console.log(`API Response: ${response.status} ${response.config.url}`)
+    }
     
     return response
   },
   (error) => {
-    // Calculate request duration if available
-    const duration = error.config?.metadata?.startTime 
-      ? Date.now() - error.config.metadata.startTime 
-      : 0
+    console.error('API Error:', error)
     
-    const status = error.response?.status
-    const method = error.config?.method?.toUpperCase()
-    const url = error.config?.url
-    
-    console.error(`❌ ${method} ${url} - ${status} (${duration}ms)`, {
-      message: error.message,
-      data: error.response?.data
-    })
-    
-    // Handle different error scenarios
-    if (status === 401) {
-      console.warn('Unauthorized request - clearing session')
-      localStorage.removeItem('sb-vcpwtrdrahsghenmgtgy-auth-token')
-      // Don't auto-redirect here, let the Supabase context handle it
-    } else if (status === 403) {
-      console.warn('Forbidden request - insufficient permissions')
-    } else if (status >= 500) {
-      console.error('Server error - please try again later')
-    } else if (error.code === 'ECONNABORTED') {
-      console.error('Request timeout - server took too long to respond')
-    } else if (!error.response) {
-      console.error('Network error - check your connection')
+    // Handle different error types
+    if (error.response) {
+      const { status, data } = error.response
+      
+      switch (status) {
+        case 401:
+          // Unauthorized - redirect to login
+          console.warn('Unauthorized access - redirecting to login')
+          if (navigate) {
+            navigate('/login')
+          }
+          break
+          
+        case 403:
+          // Forbidden
+          console.warn('Access forbidden')
+          break
+          
+        case 404:
+          // Not found
+          console.warn('Resource not found')
+          break
+          
+        case 429:
+          // Rate limited
+          console.warn('Rate limited - too many requests')
+          break
+          
+        case 500:
+          // Server error
+          console.error('Internal server error')
+          break
+          
+        default:
+          console.error(`API Error ${status}:`, data?.message || error.message)
+      }
+      
+      // Return a normalized error object
+      return Promise.reject({
+        status,
+        message: data?.message || error.message,
+        code: data?.code || 'API_ERROR',
+        originalError: error
+      })
+    } else if (error.request) {
+      // Network error
+      console.error('Network error - no response received')
+      return Promise.reject({
+        status: 0,
+        message: 'Network error - please check your connection',
+        code: 'NETWORK_ERROR',
+        originalError: error
+      })
+    } else {
+      // Request setup error
+      console.error('Request setup error:', error.message)
+      return Promise.reject({
+        status: 0,
+        message: error.message,
+        code: 'REQUEST_ERROR',
+        originalError: error
+      })
     }
-    
-    return Promise.reject(error)
   }
 )
 
-// Helper function to create standardized API responses
-export const createApiResponse = (success, data = null, error = null, message = null) => ({
-  success,
-  data,
-  error,
-  message,
-  timestamp: new Date().toISOString()
-})
-
-// Helper function to handle API calls with consistent error handling
-export const handleApiCall = async (apiCall, errorContext = 'API call') => {
+// Health check function
+export const healthCheck = async () => {
   try {
-    const response = await apiCall()
-    return createApiResponse(true, response.data, null, 'Success')
+    const response = await api.get('/health')
+    return response.data
   } catch (error) {
-    const errorMessage = error.response?.data?.message || 
-                        error.response?.data?.error || 
-                        error.message || 
-                        `${errorContext} failed`
-    
-    console.error(`${errorContext} error:`, error)
-    
-    return createApiResponse(false, null, errorMessage, errorMessage)
+    throw error
   }
 }
 
-// Helper function to build query parameters
-export const buildQueryParams = (params) => {
-  const cleanParams = {}
-  
-  Object.keys(params).forEach(key => {
-    const value = params[key]
-    if (value !== null && value !== undefined && value !== '') {
-      cleanParams[key] = value
-    }
-  })
-  
-  return cleanParams
+// Authentication service functions
+export const authService = {
+  async register(email, password) {
+    const response = await api.post('/api/auth/register', { email, password })
+    return response.data
+  },
+
+  async login(email, password) {
+    const response = await api.post('/api/auth/login', { email, password })
+    return response.data
+  },
+
+  async logout() {
+    const response = await api.post('/api/auth/logout')
+    return response.data
+  },
+
+  async getProfile() {
+    const response = await api.get('/api/auth/profile')
+    return response.data
+  },
+
+  async updateProfile(updates) {
+    const response = await api.put('/api/auth/profile', updates)
+    return response.data
+  }
 }
 
-export default api 
+// Chat service functions
+export const chatService = {
+  async sendMessage(message, context = 'knowledge_base') {
+    try {
+      const response = await api.post('/api/chat', {
+        message,
+        context
+      })
+      return response.data
+    } catch (error) {
+      console.error('Chat service error:', error)
+      throw error
+    }
+  },
+
+  async getChatHistory(limit = 50) {
+    try {
+      const response = await api.get(`/api/chat/history?limit=${limit}`)
+      return response.data
+    } catch (error) {
+      console.error('Get chat history error:', error)
+      throw error
+    }
+  },
+
+  async clearChatHistory() {
+    try {
+      const response = await api.delete('/api/chat/history')
+      return response.data
+    } catch (error) {
+      console.error('Clear chat history error:', error)
+      throw error
+    }
+  }
+}
+
+// Articles service functions
+export const articlesService = {
+  async search(query, limit = 10) {
+    try {
+      const response = await api.get(`/api/articles/search?q=${encodeURIComponent(query)}&limit=${limit}`)
+      return response.data
+    } catch (error) {
+      console.error('Articles search error:', error)
+      throw error
+    }
+  },
+
+  async getArticle(id) {
+    try {
+      const response = await api.get(`/api/articles/${id}`)
+      return response.data
+    } catch (error) {
+      console.error('Get article error:', error)
+      throw error
+    }
+  },
+
+  async getCategories() {
+    try {
+      const response = await api.get('/api/articles/categories')
+      return response.data
+    } catch (error) {
+      console.error('Get categories error:', error)
+      throw error
+    }
+  }
+}
+
+// Analytics service functions
+export const analyticsService = {
+  async getHistory() {
+    try {
+      const response = await api.get('/api/analytics/history')
+      return response.data
+    } catch (error) {
+      console.error('Get analytics history error:', error)
+      throw error
+    }
+  },
+
+  async getInsights() {
+    try {
+      const response = await api.get('/api/analytics/insights')
+      return response.data
+    } catch (error) {
+      console.error('Get analytics insights error:', error)
+      throw error
+    }
+  },
+
+  async getPopular() {
+    try {
+      const response = await api.get('/api/analytics/popular')
+      return response.data
+    } catch (error) {
+      console.error('Get popular content error:', error)
+      throw error
+    }
+  }
+}
+
+// Utility functions
+export const utils = {
+  // Check if error is a 401 unauthorized error
+  isUnauthorizedError(error) {
+    return error?.status === 401 || error?.originalError?.response?.status === 401
+  },
+
+  // Check if error is a network error
+  isNetworkError(error) {
+    return error?.code === 'NETWORK_ERROR' || !error?.status
+  },
+
+  // Get user-friendly error message
+  getErrorMessage(error) {
+    if (this.isNetworkError(error)) {
+      return 'Unable to connect to the server. Please check your internet connection.'
+    }
+    
+    if (error?.status === 401) {
+      return 'Your session has expired. Please log in again.'
+    }
+    
+    if (error?.status === 403) {
+      return 'You do not have permission to perform this action.'
+    }
+    
+    if (error?.status === 404) {
+      return 'The requested resource was not found.'
+    }
+    
+    if (error?.status === 429) {
+      return 'Too many requests. Please wait a moment and try again.'
+    }
+    
+    if (error?.status >= 500) {
+      return 'A server error occurred. Please try again later.'
+    }
+    
+    return error?.message || 'An unexpected error occurred.'
+  }
+}
+
+// Export the configured axios instance as default
+export default api
+
+// Export all services
+export {
+  api,
+  BASE_URL
+} 

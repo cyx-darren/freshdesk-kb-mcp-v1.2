@@ -9,9 +9,10 @@ const anthropic = new Anthropic({
  * Ask Claude to answer a question based on Freshdesk knowledge base articles
  * @param {string} userMessage - The user's question
  * @param {Array} searchResults - Array of article objects from Freshdesk search
+ * @param {string} systemPrompt - Optional custom system prompt to use
  * @returns {Promise<string>} Claude's response
  */
-async function askClaude(userMessage, searchResults) {
+async function askClaude(userMessage, searchResults, systemPrompt = null) {
   try {
     // Validate inputs
     if (!userMessage || typeof userMessage !== 'string') {
@@ -36,11 +37,26 @@ ${article.url ? `URL: ${article.url}` : ''}
 ---`;
     }).join('\n\n');
 
-    // System prompt
-    const systemPrompt = `You are a helpful assistant for EasyPrint's team. Answer questions based on the Freshdesk knowledge base articles provided. 
-Always cite the article ID when using information from an article using this format: [Article #ID].
-If the information isn't in the provided articles, say so clearly.
-Be professional, concise, and helpful.`;
+    // Use provided system prompt or default fallback
+    const finalSystemPrompt = systemPrompt || `You are an expert EasyPrint customer support assistant with access to comprehensive knowledge base articles. Your goal is to provide detailed, accurate, and actionable answers based on the provided knowledge base content.
+
+CRITICAL INSTRUCTIONS:
+- Use ALL available information from the provided articles to give complete, detailed answers
+- When articles mention "images" or "attached images", acknowledge that these contain important visual information (like color charts, size guides, etc.)
+- Always cite specific article IDs when referencing information: [Article #ID] 
+- Provide specific details when available: exact quantities, pricing, colors, specifications, etc.
+- Be confident in your answers when the information is clearly stated in the articles
+- Organize complex information clearly with sections/bullet points when helpful
+- If multiple related products are mentioned, provide information about each
+- When articles reference MOQ (minimum order quantity), pricing, or specifications, include exact details
+
+RESPONSE STRATEGY:
+- Start with the direct answer to the user's question
+- Provide detailed information from the articles
+- Include relevant specifications, limitations, or requirements
+- End with any additional helpful context or next steps
+
+Remember: You have access to comprehensive EasyPrint product information. Use it fully to help customers get complete answers rather than generic responses.`;
 
     // User message with context
     const userPrompt = `Based on the following Freshdesk knowledge base articles, please answer this question: "${userMessage}"
@@ -52,12 +68,12 @@ Please provide a helpful answer based on the information above. Remember to cite
 
     console.log('[CLAUDE] Processing request with', searchResults.length, 'articles');
     
-    // Make request to Claude
+    // Make request to Claude with enhanced parameters to match Claude Desktop experience
     const response = await anthropic.messages.create({
       model: 'claude-3-5-sonnet-20241022',
-      max_tokens: 2000,
-      temperature: 0.3,
-      system: systemPrompt,
+      max_tokens: 4000,  // Increased for more detailed responses
+      temperature: 0.5,  // Slightly higher for more comprehensive answers
+      system: finalSystemPrompt,
       messages: [
         {
           role: 'user',
