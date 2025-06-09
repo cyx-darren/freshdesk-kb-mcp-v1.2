@@ -228,6 +228,17 @@ export const chatService = {
     }
   },
 
+  async getFolders() {
+    try {
+      // Use public endpoint temporarily for testing
+      const response = await api.get('/api/articles/folders-public')
+      return response.data
+    } catch (error) {
+      console.error('Get folders error:', error)
+      throw error
+    }
+  },
+
   async createArticle(articleData) {
     try {
       const response = await api.post('/api/articles/create', articleData)

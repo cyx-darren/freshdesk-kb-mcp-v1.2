@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import Navigation from '../components/Navigation.jsx'
-import ArticleEditorWorking from '../components/ArticleEditorWorking.jsx'
+import ArticleEditor from '../components/ArticleEditor.jsx'
 
 const ArticleEditorPage = () => {
   const navigate = useNavigate()
@@ -248,7 +248,7 @@ const ArticleEditorPage = () => {
       </div>
 
       {/* Article Editor Modal */}
-      <ArticleEditorWorking
+      <ArticleEditor
         isOpen={isEditorOpen}
         onClose={handleCloseEditor}
         originalQuestion={sampleData.originalQuestion}
