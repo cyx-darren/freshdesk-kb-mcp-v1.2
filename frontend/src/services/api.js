@@ -11,8 +11,17 @@ console.log('=== API Service Environment Debug ===')
 console.log('VITE_API_URL:', import.meta.env.VITE_API_URL)
 console.log('VITE_REACT_APP_API_URL:', import.meta.env.VITE_REACT_APP_API_URL)
 console.log('VITE_API_BASE_URL:', import.meta.env.VITE_API_BASE_URL)
+console.log('MODE:', import.meta.env.MODE)
+console.log('PROD:', import.meta.env.PROD)
+console.log('DEV:', import.meta.env.DEV)
 console.log('Final BASE_URL:', BASE_URL)
 console.log('=== End API Debug ===')
+
+// Add production warning
+if (import.meta.env.PROD && BASE_URL.includes('localhost')) {
+  console.error('🚨 PRODUCTION ERROR: Still using localhost backend URL!', BASE_URL)
+  console.error('Expected production URL should be: https://backend-production-5f2c.up.railway.app')
+}
 
 // Create axios instance
 const api = axios.create({
