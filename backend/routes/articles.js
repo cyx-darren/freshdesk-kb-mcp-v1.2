@@ -108,8 +108,6 @@ router.get('/search', async (req, res) => {
   }
 })
 
-
-
 /**
  * GET /articles/categories
  * Get available categories (protected route)
@@ -154,6 +152,177 @@ router.get('/categories', requireAuth, async (req, res) => {
       error: 'Categories fetch failed',
       message: 'An unexpected error occurred while fetching categories',
       code: 'CATEGORIES_FETCH_ERROR'
+    })
+  }
+})
+
+/**
+ * GET /articles/folders
+ * Get all folders from all categories (protected route)
+ */
+router.get('/folders', requireAuth, async (req, res) => {
+  try {
+    console.log(`[FOLDERS] User ${req.user.email} fetching all folders`)
+
+    const foldersResult = await mcpClient.listAllFolders()
+
+    const response = {
+      success: true,
+      folders: foldersResult.folders || [],
+      categories: foldersResult.categories || [],
+      total_folders: foldersResult.total_folders || 0,
+      total_categories: foldersResult.total_categories || 0,
+      user: {
+        id: req.user.id,
+        email: req.user.email
+      },
+      timestamp: new Date().toISOString()
+    }
+
+    console.log(`[FOLDERS] Found ${response.total_folders} folders from ${response.total_categories} categories`)
+
+    res.status(200).json(response)
+
+  } catch (error) {
+    console.error('Folders fetch error:', {
+      error: error.message,
+      user: req.user?.email,
+      timestamp: new Date().toISOString()
+    })
+
+    if (error.message.includes('MCP')) {
+      return res.status(503).json({
+        error: 'Service unavailable',
+        message: 'Knowledge base service is currently unavailable',
+        code: 'MCP_SERVICE_ERROR'
+      })
+    }
+
+    res.status(500).json({
+      error: 'Folders fetch failed',
+      message: 'An unexpected error occurred while fetching folders',
+      code: 'FOLDERS_FETCH_ERROR'
+    })
+  }
+})
+
+/**
+ * GET /articles/test-mcp
+ * Test MCP connection (public endpoint for debugging)
+ */
+router.get('/test-mcp', async (req, res) => {
+  try {
+    console.log('[MCP TEST] Testing MCP connection')
+
+    const testResult = await mcpClient.testConnection()
+
+    const response = {
+      success: true,
+      mcp_connection: testResult,
+      timestamp: new Date().toISOString()
+    }
+
+    console.log('[MCP TEST] Connection test result:', testResult)
+
+    res.status(200).json(response)
+
+  } catch (error) {
+    console.error('MCP test error:', {
+      error: error.message,
+      timestamp: new Date().toISOString()
+    })
+
+    res.status(500).json({
+      error: 'MCP test failed',
+      message: error.message,
+      code: 'MCP_TEST_ERROR'
+    })
+  }
+})
+
+/**
+ * GET /articles/test-folders
+ * Test folders fetching (public endpoint for debugging)
+ */
+router.get('/test-folders', async (req, res) => {
+  try {
+    console.log('[FOLDERS TEST] Testing folders fetching')
+
+    const foldersResult = await mcpClient.listAllFolders()
+
+    const response = {
+      success: true,
+      folders: foldersResult.folders || [],
+      categories: foldersResult.categories || [],
+      total_folders: foldersResult.total_folders || 0,
+      total_categories: foldersResult.total_categories || 0,
+      timestamp: new Date().toISOString()
+    }
+
+    console.log(`[FOLDERS TEST] Found ${response.total_folders} folders from ${response.total_categories} categories`)
+
+    res.status(200).json(response)
+
+  } catch (error) {
+    console.error('Folders test error:', {
+      error: error.message,
+      timestamp: new Date().toISOString()
+    })
+
+    res.status(500).json({
+      error: 'Folders test failed',
+      message: error.message,
+      code: 'FOLDERS_TEST_ERROR'
+    })
+  }
+})
+
+/**
+ * GET /articles/folders-public
+ * Get all folders from all categories (public endpoint for Article Editor testing)
+ * This bypasses authentication temporarily for testing the Article Editor functionality
+ */
+router.get('/folders-public', async (req, res) => {
+  try {
+    console.log('[FOLDERS PUBLIC] Fetching all folders (public access)')
+
+    const foldersResult = await mcpClient.listAllFolders()
+
+    const response = {
+      success: true,
+      folders: foldersResult.folders || [],
+      categories: foldersResult.categories || [],
+      total_folders: foldersResult.total_folders || 0,
+      total_categories: foldersResult.total_categories || 0,
+      user: {
+        id: 'test-user',
+        email: 'test@example.com'
+      },
+      timestamp: new Date().toISOString()
+    }
+
+    console.log(`[FOLDERS PUBLIC] Found ${response.total_folders} folders from ${response.total_categories} categories`)
+
+    res.status(200).json(response)
+
+  } catch (error) {
+    console.error('Folders public fetch error:', {
+      error: error.message,
+      timestamp: new Date().toISOString()
+    })
+
+    if (error.message.includes('MCP')) {
+      return res.status(503).json({
+        error: 'Service unavailable',
+        message: 'Knowledge base service is currently unavailable',
+        code: 'MCP_SERVICE_ERROR'
+      })
+    }
+
+    res.status(500).json({
+      error: 'Folders fetch failed',
+      message: 'An unexpected error occurred while fetching folders',
+      code: 'FOLDERS_FETCH_ERROR'
     })
   }
 })
@@ -360,34 +529,61 @@ router.post('/create', requireAuth, async (req, res) => {
     const {
       title,
       description,
-      category_id,
-      subcategory_id,
+      folder_id,
+      category_id, // Keep for backward compatibility
+      subcategory_id, // Keep for backward compatibility
       tags,
+      seo_title,
+      meta_description,
       type = 1, // Solution article
       status = 2 // Published
     } = req.body
 
     // Validate required fields
-    if (!title || !description || !category_id) {
+    if (!title || !description) {
       return res.status(400).json({
         error: 'Validation error',
-        message: 'Title, description, and category are required',
+        message: 'Title and description are required',
         code: 'MISSING_REQUIRED_FIELDS'
       })
     }
 
-    console.log(`[CREATE ARTICLE] User ${req.user.email} creating article: "${title}"`)
+    // Determine folder_id: use provided folder_id, or fall back to subcategory_id, or category_id
+    const finalFolderId = folder_id || subcategory_id || category_id
+    
+    if (!finalFolderId) {
+      return res.status(400).json({
+        error: 'Validation error',
+        message: 'folder_id, subcategory_id, or category_id is required',
+        code: 'MISSING_FOLDER_ID'
+      })
+    }
 
-    // Create article via MCP service
+    console.log(`[CREATE ARTICLE] User ${req.user.email} creating article: "${title}"`)
+    console.log(`[CREATE ARTICLE] Using folder_id: ${finalFolderId}`)
+
+    // Create article via MCP service with correct field names
     const articleData = {
       title: title.trim(),
       description,
-      category_id,
-      subcategory_id,
-      tags: Array.isArray(tags) ? tags : [],
-      type,
-      status
+      folder_id: parseInt(finalFolderId),
+      tags: Array.isArray(tags) ? tags : (tags ? tags.split(',').map(tag => tag.trim()).filter(Boolean) : []),
+      seo_title: seo_title ? seo_title.trim() : undefined,
+      meta_description: meta_description ? meta_description.trim() : undefined,
+      status: parseInt(status) || 2
     }
+
+    // Remove undefined fields
+    Object.keys(articleData).forEach(key => {
+      if (articleData[key] === undefined) {
+        delete articleData[key]
+      }
+    })
+
+    console.log(`[CREATE ARTICLE] Article data:`, {
+      ...articleData,
+      description: description ? `${description.substring(0, 100)}...` : 'No description'
+    })
 
     const createResult = await mcpClient.createArticle(articleData)
 
@@ -428,6 +624,14 @@ router.post('/create', requireAuth, async (req, res) => {
         error: 'Validation error',
         message: error.message,
         code: 'VALIDATION_ERROR'
+      })
+    }
+
+    if (error.message.includes('folder') || error.message.includes('category')) {
+      return res.status(400).json({
+        error: 'Invalid folder',
+        message: 'The specified folder or category does not exist',
+        code: 'INVALID_FOLDER_ID'
       })
     }
 

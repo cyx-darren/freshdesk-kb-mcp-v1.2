@@ -1,8 +1,9 @@
-import { spawn, execSync } from 'child_process'
+import { spawn } from 'child_process'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import dotenv from 'dotenv'
 import axios from 'axios'
+import fs from 'fs'
 
 // Load environment variables
 dotenv.config()
@@ -16,23 +17,22 @@ const __dirname = path.dirname(__filename)
 class MCPClient {
   constructor() {
     // Get MCP server configuration
-    this.mcpServerPath = process.env.MCP_SERVER_PATH || '../freshdesk-kb-mcp'
+    this.mcpServerPath = process.env.MCP_SERVER_PATH || '../mcp-server'
     this.mcpServerUrl = process.env.MCP_SERVER_URL
     this.nodeEnv = process.env.NODE_ENV || 'development'
     
-    // Resolve the absolute path - the MCP server is in the same parent directory as freshdesk-web-app
-    this.absoluteMcpPath = path.resolve(__dirname, '../../../freshdesk-kb-mcp')
+    // Resolve the absolute path - the MCP server is in the same parent directory as the backend
+    this.absoluteMcpPath = path.resolve(__dirname, '../../mcp-server')
     
     // Get the full path to node (only needed for stdio mode)
     if (this.nodeEnv !== 'production') {
-    try {
-      this.nodePath = execSync('which node').toString().trim()
-    } catch (error) {
-      // Fallback for common node locations
-      this.nodePath = process.execPath || '/usr/local/bin/node'
+      // Use the correct node path for this system
+      this.nodePath = '/opt/homebrew/bin/node'
+      console.log('[MCP CLIENT] Using node path:', this.nodePath)
     }
-    console.log('[MCP CLIENT] Using node path:', this.nodePath)
-    }
+    
+    // Load MCP server environment variables
+    this.mcpEnvVars = this.loadMcpEnvVars()
     
     // Configuration
     this.timeout = 30000 // 30 seconds timeout
@@ -42,6 +42,38 @@ class MCPClient {
       console.log(`[MCP CLIENT] Initialized in HTTP mode with URL: ${this.mcpServerUrl}`)
     } else {
       console.log(`[MCP CLIENT] Initialized in stdio mode with path: ${this.absoluteMcpPath}`)
+    }
+  }
+
+  /**
+   * Load MCP server environment variables from its .env file
+   * @returns {object} - Environment variables object
+   */
+  loadMcpEnvVars() {
+    try {
+      const envPath = path.join(this.absoluteMcpPath, '.env')
+      if (fs.existsSync(envPath)) {
+        const envContent = fs.readFileSync(envPath, 'utf8')
+        const envVars = {}
+        
+        envContent.split('\n').forEach(line => {
+          line = line.trim()
+          if (line && !line.startsWith('#') && line.includes('=')) {
+            const [key, ...valueParts] = line.split('=')
+            const value = valueParts.join('=').replace(/^["']|["']$/g, '') // Remove quotes
+            envVars[key] = value
+          }
+        })
+        
+        console.log('[MCP CLIENT] Loaded MCP environment variables:', Object.keys(envVars))
+        return envVars
+      } else {
+        console.warn('[MCP CLIENT] MCP server .env file not found at:', envPath)
+        return {}
+      }
+    } catch (error) {
+      console.error('[MCP CLIENT] Error loading MCP environment variables:', error.message)
+      return {}
     }
   }
 
@@ -134,7 +166,13 @@ class MCPClient {
         // Spawn the MCP server process
         const mcpProcess = spawn(this.nodePath, ['src/index.js'], {
           cwd: this.absoluteMcpPath,
-          stdio: ['pipe', 'pipe', 'pipe']
+          stdio: ['pipe', 'pipe', 'pipe'],
+          env: { 
+            ...process.env,
+            ...this.mcpEnvVars,
+            PATH: process.env.PATH,
+            NODE_ENV: this.nodeEnv 
+          }
         })
 
         let stdout = ''
@@ -343,7 +381,7 @@ class MCPClient {
   }
 
   /**
-   * List available categories in the knowledge base
+   * List all categories in the knowledge base
    * @returns {Promise<object>} - Categories list
    */
   async listCategories() {
@@ -378,6 +416,69 @@ class MCPClient {
   }
 
   /**
+   * List all folders from all categories in the knowledge base
+   * @returns {Promise<object>} - All folders list with category information
+   */
+  async listAllFolders() {
+    try {
+      console.log('[MCP] Fetching all folders from all categories')
+      
+      const result = await this.callFunction('list_all_folders', {})
+      
+      // Parse the JSON response if it's a string
+      let parsedResult = result
+      if (typeof result === 'string') {
+        try {
+          parsedResult = JSON.parse(result)
+        } catch (parseError) {
+          console.error('[MCP] Failed to parse folders response:', parseError.message)
+          throw new Error('Invalid response format from MCP server')
+        }
+      }
+      
+      // Handle different response formats
+      let foldersData = parsedResult
+      if (parsedResult.content && Array.isArray(parsedResult.content) && parsedResult.content[0]?.text) {
+        try {
+          foldersData = JSON.parse(parsedResult.content[0].text)
+        } catch (parseError) {
+          console.error('[MCP] Failed to parse folders content:', parseError.message)
+          throw new Error('Invalid content format from MCP server')
+        }
+      }
+      
+      console.log(`[MCP] Retrieved ${foldersData.total_folders || 0} folders from ${foldersData.total_categories || 0} categories`)
+      
+      return {
+        success: true,
+        folders: foldersData.folders || [],
+        categories: foldersData.categories || [],
+        total_folders: foldersData.total_folders || 0,
+        total_categories: foldersData.total_categories || 0,
+        timestamp: new Date().toISOString()
+      }
+      
+    } catch (error) {
+      console.error('[MCP] All folders fetch failed:', error.message)
+      
+      // Return empty folders if MCP doesn't support this function
+      if (error.message.includes('Unknown method') || error.message.includes('not found')) {
+        return {
+          success: true,
+          folders: [],
+          categories: [],
+          total_folders: 0,
+          total_categories: 0,
+          note: 'All folders listing not supported by MCP server',
+          timestamp: new Date().toISOString()
+        }
+      }
+      
+      throw new Error(`Failed to list all folders: ${error.message}`)
+    }
+  }
+
+  /**
    * Create a new article in Freshdesk
    * @param {object} articleData - Article data
    * @returns {Promise<object>} - Created article data
@@ -386,13 +487,36 @@ class MCPClient {
     try {
       console.log(`[MCP] Creating article: ${articleData.title}`)
       
-      if (!articleData.title || !articleData.description || !articleData.category_id) {
-        throw new Error('Title, description, and category_id are required')
+      if (!articleData.title || !articleData.description || !articleData.folder_id) {
+        throw new Error('Title, description, and folder_id are required')
       }
 
-      const result = await this.callFunction('create_article', articleData)
+      // Prepare the data for MCP server with correct field names
+      const mcpArticleData = {
+        title: articleData.title,
+        description: articleData.description,
+        folder_id: parseInt(articleData.folder_id),
+        tags: Array.isArray(articleData.tags) ? articleData.tags : [],
+        status: parseInt(articleData.status) || 1
+      }
+
+      // Add SEO fields if provided
+      if (articleData.seo_title) {
+        mcpArticleData.seo_title = articleData.seo_title
+      }
       
-      console.log(`[MCP] Article created: ${result.id || 'Unknown ID'}`)
+      if (articleData.meta_description) {
+        mcpArticleData.meta_description = articleData.meta_description
+      }
+
+      console.log(`[MCP] Sending to MCP server:`, {
+        ...mcpArticleData,
+        description: mcpArticleData.description ? `${mcpArticleData.description.substring(0, 100)}...` : 'No description'
+      })
+
+      const result = await this.callFunction('create_article', mcpArticleData)
+      
+      console.log(`[MCP] Article created successfully: ${result.id || 'Unknown ID'}`)
       
       return {
         success: true,
