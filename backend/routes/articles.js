@@ -352,6 +352,94 @@ router.delete('/cache/:articleId', requireAuth, async (req, res) => {
 })
 
 /**
+ * POST /articles/create
+ * Create a new article in Freshdesk (protected route)
+ */
+router.post('/create', requireAuth, async (req, res) => {
+  try {
+    const {
+      title,
+      description,
+      category_id,
+      subcategory_id,
+      tags,
+      type = 1, // Solution article
+      status = 2 // Published
+    } = req.body
+
+    // Validate required fields
+    if (!title || !description || !category_id) {
+      return res.status(400).json({
+        error: 'Validation error',
+        message: 'Title, description, and category are required',
+        code: 'MISSING_REQUIRED_FIELDS'
+      })
+    }
+
+    console.log(`[CREATE ARTICLE] User ${req.user.email} creating article: "${title}"`)
+
+    // Create article via MCP service
+    const articleData = {
+      title: title.trim(),
+      description,
+      category_id,
+      subcategory_id,
+      tags: Array.isArray(tags) ? tags : [],
+      type,
+      status
+    }
+
+    const createResult = await mcpClient.createArticle(articleData)
+
+    const response = {
+      success: true,
+      article: createResult.article,
+      message: 'Article created successfully',
+      user: {
+        id: req.user.id,
+        email: req.user.email
+      },
+      timestamp: new Date().toISOString()
+    }
+
+    console.log(`[CREATE ARTICLE] Successfully created article: ${createResult.article?.id}`)
+
+    res.status(201).json(response)
+
+  } catch (error) {
+    console.error('Article creation error:', {
+      error: error.message,
+      user: req.user?.email,
+      title: req.body?.title,
+      timestamp: new Date().toISOString()
+    })
+
+    // Handle specific MCP errors
+    if (error.message.includes('MCP')) {
+      return res.status(503).json({
+        error: 'Service unavailable',
+        message: 'Knowledge base service is currently unavailable',
+        code: 'MCP_SERVICE_ERROR'
+      })
+    }
+
+    if (error.message.includes('validation') || error.message.includes('invalid')) {
+      return res.status(400).json({
+        error: 'Validation error',
+        message: error.message,
+        code: 'VALIDATION_ERROR'
+      })
+    }
+
+    res.status(500).json({
+      error: 'Article creation failed',
+      message: 'An unexpected error occurred while creating the article',
+      code: 'ARTICLE_CREATE_ERROR'
+    })
+  }
+})
+
+/**
  * GET /articles/:id
  * Get a specific article by ID (protected route)
  * NOTE: This route MUST be last to avoid catching other specific routes like /categories

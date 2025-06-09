@@ -88,7 +88,7 @@ freshdesk-kb-mcp-v1.2/
 - Git
 
 ### Backend Setup
-```bash
+   ```bash
 # Navigate to backend
 cd backend
 
@@ -104,12 +104,12 @@ npm run dev
 ```
 
 ### Frontend Setup
-```bash
+   ```bash
 # Navigate to frontend
 cd frontend
 
 # Install dependencies
-npm install
+   npm install
 
 # Create local environment file
 cp .env.example .env
@@ -120,7 +120,7 @@ npm run dev
 ```
 
 ### MCP Server Setup
-```bash
+   ```bash
 # Navigate to MCP server
 cd mcp-server
 
@@ -128,12 +128,12 @@ cd mcp-server
 npm install
 
 # Create local environment file
-cp .env.example .env
+   cp .env.example .env
 
 # Start development server
-npm run dev
+   npm run dev
 # Runs on http://localhost:3000 (HTTP wrapper)
-```
+   ```
 
 ## 📡 API Endpoints
 
@@ -210,7 +210,7 @@ See [DEPLOYMENT.md](./DEPLOYMENT.md) for a comprehensive deployment checklist an
 
 ## 📝 License
 
-This project is proprietary and confidential.
+This project is proprietary and confidential. 
 
 ## 🆘 Support
 

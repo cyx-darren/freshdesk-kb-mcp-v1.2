@@ -88,6 +88,19 @@ const AdminQuestions = () => {
     }
   }
 
+  // Handle create article
+  const handleCreateArticle = (feedbackItem) => {
+    // Navigate to article editor with the question data
+    navigate('/article-editor', {
+      state: {
+        originalQuestion: feedbackItem.question,
+        aiResponse: feedbackItem.ai_response,
+        feedbackType: feedbackItem.feedback_type,
+        feedbackId: feedbackItem.id
+      }
+    })
+  }
+
   // Truncate text
   const truncateText = (text, maxLength = 60) => {
     if (!text) return ''
@@ -326,17 +339,34 @@ const AdminQuestions = () => {
                         {item.assigned_to_email || 'Unassigned'}
                       </td>
                       <td className="px-4 py-4">
-                        {!item.assigned_to && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              handleClaimQuestion(item.id)
-                            }}
-                            className="px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors"
-                          >
-                            Claim
-                          </button>
-                        )}
+                        <div className="flex space-x-2">
+                          {!item.assigned_to && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleClaimQuestion(item.id)
+                              }}
+                              className="px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors"
+                            >
+                              Claim
+                            </button>
+                          )}
+                          {(item.feedback_type === 'needs_improvement' || item.feedback_type === 'incorrect') && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleCreateArticle(item)
+                              }}
+                              className="px-2 py-1 text-xs bg-green-100 text-green-700 rounded hover:bg-green-200 transition-colors flex items-center space-x-1"
+                              title="Create Knowledge Base Article"
+                            >
+                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                              </svg>
+                              <span>Create Article</span>
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}

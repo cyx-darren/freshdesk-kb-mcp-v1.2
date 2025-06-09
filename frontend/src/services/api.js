@@ -216,6 +216,26 @@ export const chatService = {
       console.error('Clear chat history error:', error)
       throw error
     }
+  },
+
+  async getCategories() {
+    try {
+      const response = await api.get('/api/articles/categories')
+      return response.data
+    } catch (error) {
+      console.error('Get categories error:', error)
+      throw error
+    }
+  },
+
+  async createArticle(articleData) {
+    try {
+      const response = await api.post('/api/articles/create', articleData)
+      return response.data
+    } catch (error) {
+      console.error('Create article error:', error)
+      throw error
+    }
   }
 }
 
@@ -247,6 +267,16 @@ export const articlesService = {
       return response.data
     } catch (error) {
       console.error('Get categories error:', error)
+      throw error
+    }
+  },
+
+  async createArticle(articleData) {
+    try {
+      const response = await api.post('/api/articles/create', articleData)
+      return response.data
+    } catch (error) {
+      console.error('Create article error:', error)
       throw error
     }
   }

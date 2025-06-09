@@ -25,13 +25,13 @@ class MCPClient {
     
     // Get the full path to node (only needed for stdio mode)
     if (this.nodeEnv !== 'production') {
-      try {
-        this.nodePath = execSync('which node').toString().trim()
-      } catch (error) {
-        // Fallback for common node locations
-        this.nodePath = process.execPath || '/usr/local/bin/node'
-      }
-      console.log('[MCP CLIENT] Using node path:', this.nodePath)
+    try {
+      this.nodePath = execSync('which node').toString().trim()
+    } catch (error) {
+      // Fallback for common node locations
+      this.nodePath = process.execPath || '/usr/local/bin/node'
+    }
+    console.log('[MCP CLIENT] Using node path:', this.nodePath)
     }
     
     // Configuration
@@ -374,6 +374,35 @@ class MCPClient {
       }
       
       throw new Error(`Failed to list categories: ${error.message}`)
+    }
+  }
+
+  /**
+   * Create a new article in Freshdesk
+   * @param {object} articleData - Article data
+   * @returns {Promise<object>} - Created article data
+   */
+  async createArticle(articleData) {
+    try {
+      console.log(`[MCP] Creating article: ${articleData.title}`)
+      
+      if (!articleData.title || !articleData.description || !articleData.category_id) {
+        throw new Error('Title, description, and category_id are required')
+      }
+
+      const result = await this.callFunction('create_article', articleData)
+      
+      console.log(`[MCP] Article created: ${result.id || 'Unknown ID'}`)
+      
+      return {
+        success: true,
+        article: result,
+        timestamp: new Date().toISOString()
+      }
+      
+    } catch (error) {
+      console.error(`[MCP] Article creation failed:`, error.message)
+      throw new Error(`Failed to create article: ${error.message}`)
     }
   }
 

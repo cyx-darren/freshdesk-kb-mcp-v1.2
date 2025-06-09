@@ -56,10 +56,10 @@ if (FRONTEND_URL) {
 // Add development origins only in development mode
 if (NODE_ENV === 'development') {
   allowedOrigins.push(
-    'http://localhost:3000', // Vite frontend
-    'http://localhost:3001', // Alternative port
-    'http://localhost:5173', // Vite default
-    'http://localhost:4173'  // Vite preview
+  'http://localhost:3000', // Vite frontend
+  'http://localhost:3001', // Alternative port
+  'http://localhost:5173', // Vite default
+  'http://localhost:4173'  // Vite preview
   )
 }
 
@@ -74,8 +74,8 @@ app.use(cors({
       if (NODE_ENV === 'production') {
         console.error(`🚫 CORS blocked origin: ${origin}`)
         console.error(`🔗 Allowed origins: ${allowedOrigins.join(', ')}`)
-      } else {
-        console.warn(`CORS blocked origin: ${origin}`)
+    } else {
+      console.warn(`CORS blocked origin: ${origin}`)
       }
       callback(new Error('Not allowed by CORS policy'))
     }
@@ -100,7 +100,7 @@ app.use((req, res, next) => {
     console.log(`[${timestamp}] ${req.method} ${req.path} - ${req.ip || req.connection.remoteAddress}`)
   } else {
     // Development logging - more verbose
-    console.log(`[${timestamp}] ${req.method} ${req.path}`)
+  console.log(`[${timestamp}] ${req.method} ${req.path}`)
   }
   next()
 })

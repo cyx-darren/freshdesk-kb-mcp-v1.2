@@ -9,16 +9,24 @@ function Navigation() {
   
   const navigation = [
     { name: 'Home', href: '/', current: location.pathname === '/' },
+    { name: 'Chat', href: '/chat', current: location.pathname === '/chat' },
     { name: 'Search', href: '/search', current: location.pathname === '/search' },
   ]
 
-  // Add dashboard link for authenticated users
+  // Add additional links for authenticated users
   if (user) {
-    navigation.push({ 
-      name: 'Dashboard', 
-      href: '/dashboard', 
-      current: location.pathname === '/dashboard' 
-    })
+    navigation.push(
+      { 
+        name: 'Article Editor', 
+        href: '/article-editor', 
+        current: location.pathname === '/article-editor' 
+      },
+      { 
+        name: 'Dashboard', 
+        href: '/dashboard', 
+        current: location.pathname === '/dashboard' 
+      }
+    )
   }
 
   const handleSignOut = async () => {
