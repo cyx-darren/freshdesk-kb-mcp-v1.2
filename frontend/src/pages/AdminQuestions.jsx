@@ -232,7 +232,7 @@ const AdminQuestions = () => {
                 <span className="text-white font-bold">A</span>
               </div>
               <div>
-                <h1 className="text-xl font-bold text-gray-900">Admin Questions</h1>
+                <h1 className="text-xl font-bold text-gray-900">ELSA Admin Dashboard</h1>
                 <p className="text-sm text-gray-500">Manage AI feedback submissions</p>
               </div>
             </div>

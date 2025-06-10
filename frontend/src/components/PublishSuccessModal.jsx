@@ -33,7 +33,7 @@ const PublishSuccessModal = ({
             ✅ Article Published Successfully!
           </h2>
           <p className="text-gray-600 text-center text-sm">
-            Your article has been published to Freshdesk and is now live.
+            ELSA has successfully published your article to Freshdesk and it's now live.
           </p>
         </div>
 

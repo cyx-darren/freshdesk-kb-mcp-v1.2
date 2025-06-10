@@ -65,7 +65,7 @@ const Chat = () => {
     }
     
     setMessages(prev => [...prev, userMessage])
-    setLoadingState({ isLoading: true, step: 'Searching knowledge base...', progress: 30 })
+            setLoadingState({ isLoading: true, step: 'ELSA is searching...', progress: 30 })
     setError('')
 
     try {
@@ -156,11 +156,11 @@ const Chat = () => {
                 <span className="text-white font-bold text-sm md:text-base">EP</span>
               </div>
               <div className="hidden sm:block">
-                <h1 className="text-lg md:text-xl font-bold text-gray-900">EasyPrint Knowledge Chat</h1>
-                <p className="text-xs text-gray-500">AI-powered support assistant</p>
+                <h1 className="text-lg md:text-xl font-bold text-gray-900">ELSA</h1>
+                <p className="text-xs text-gray-500">Easyprint Learning & Support Assistant</p>
               </div>
               <div className="sm:hidden">
-                <h1 className="text-lg font-bold text-gray-900">EasyPrint</h1>
+                <h1 className="text-lg font-bold text-gray-900">ELSA</h1>
               </div>
             </div>
             
@@ -222,10 +222,10 @@ const Chat = () => {
                     <span className="text-white font-bold text-2xl">EP</span>
                   </div>
                   <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-3 animate-slide-up">
-                    Welcome to EasyPrint Support
+                    Hi, I'm ELSA! 👋
                   </h2>
                   <p className="text-gray-600 mb-8 text-lg animate-slide-up-delay">
-                    I'm your AI assistant powered by our knowledge base. Ask me anything about EasyPrint products, services, or technical support!
+                    I'm ELSA - your Easyprint Learning & Support Assistant. Ask me anything about EasyPrint products, services, or technical support!
                   </p>
                   
                   {/* Example Questions */}
@@ -266,7 +266,7 @@ const Chat = () => {
                       <div className="text-3xl mb-4">⚡</div>
                       <h3 className="font-semibold text-lg mb-2">Instant Answers</h3>
                       <p className="text-gray-600 text-sm">
-                        Get immediate responses from our comprehensive knowledge base
+                        Get immediate responses powered by ELSA's comprehensive knowledge base
                       </p>
                     </div>
                     
@@ -352,7 +352,7 @@ const Chat = () => {
             <ChatInput
               onSendMessage={handleSendMessage}
               loading={loadingState.isLoading}
-              placeholder="Ask me anything about EasyPrint..."
+              placeholder="Hi! Ask me anything about EasyPrint..."
             />
           </div>
         </div>

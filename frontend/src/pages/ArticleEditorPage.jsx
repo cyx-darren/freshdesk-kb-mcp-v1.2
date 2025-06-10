@@ -88,7 +88,7 @@ const ArticleEditorPage = () => {
               onClick={() => navigate('/admin/questions')}
               className="hover:text-gray-700 transition-colors"
             >
-              Freshdesk KB
+              ELSA Admin
             </button>
             <span>›</span>
             <span className="text-gray-900 font-medium">
@@ -100,15 +100,15 @@ const ArticleEditorPage = () => {
             <div className="flex items-center space-x-4">
               <h1 className="text-xl font-semibold text-gray-900">
                 {isFromAdminQuestions 
-                  ? 'Create Knowledge Base Article' 
-                  : 'Knowledge Base Article Editor'
+                  ? 'ELSA - Create Knowledge Base Article' 
+                  : 'ELSA - Knowledge Base Article Editor'
                 }
               </h1>
               
               {/* Context indicator */}
               {isFromAdminQuestions && (
                 <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                  From Admin Questions
+                  From ELSA Admin
                 </span>
               )}
             </div>

@@ -59,7 +59,7 @@ const Login = () => {
             EasyPrint
           </h2>
           <p className="text-lg text-gray-600 mb-2">
-            Knowledge Base Portal
+                            ELSA Portal
           </p>
           <p className="text-sm text-gray-500">
             Sign in to access your account
@@ -165,7 +165,7 @@ const Login = () => {
           <div className="mt-6 pt-6 border-t border-gray-200">
             <div className="text-center">
               <p className="text-xs text-gray-500">
-                Access your EasyPrint Knowledge Base
+                Access ELSA - Easyprint Learning & Support Assistant
               </p>
               <p className="text-xs text-gray-500 mt-1">
                 Secure • Fast • Reliable

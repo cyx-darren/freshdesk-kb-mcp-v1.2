@@ -264,7 +264,7 @@ const DraftsManager = ({ onEditDraft, onClose, feedbackId, originalQuestion }) =
             </>
           ) : (
             <>
-              <h2 className="text-xl font-semibold text-gray-900">My Drafts</h2>
+              <h2 className="text-xl font-semibold text-gray-900">ELSA Draft Manager</h2>
               <p className="text-sm text-gray-600 mt-1">
                 Manage your draft articles ({filteredDrafts.length} of {drafts.length})
               </p>

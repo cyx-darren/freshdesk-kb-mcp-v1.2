@@ -733,7 +733,7 @@ const ArticleEditor = ({
                 </svg>
               </div>
               <div>
-                <h2 className="text-xl font-semibold text-gray-900">📝 Knowledge Base Article Editor</h2>
+                <h2 className="text-xl font-semibold text-gray-900">📝 ELSA Knowledge Base Editor</h2>
                 <div className="flex items-center space-x-2 text-sm text-gray-600">
                   <span>Create and publish to Freshdesk</span>
                   {lastSaved && (
