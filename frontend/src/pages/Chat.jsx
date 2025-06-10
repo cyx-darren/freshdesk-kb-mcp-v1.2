@@ -7,6 +7,9 @@ import ChatMessage from '../components/ChatMessage.jsx'
 import ChatInput from '../components/ChatInput.jsx'
 import LoadingDots from '../components/LoadingDots.jsx'
 import ArticleModal from '../components/ArticleModal.jsx'
+import elsaAvatar from '../assets/images/elsa-avatar.png'
+import elsaAvatarMedium from '../assets/images/elsa-avatar-medium.png'
+import elsaAvatarLarge from '../assets/images/elsa-avatar-large.png'
 
 const Chat = () => {
   const [messages, setMessages] = useState([])
@@ -218,8 +221,27 @@ const Chat = () => {
               // Enhanced Welcome Screen
               <div className="h-full flex items-center justify-center animate-fade-in">
                 <div className="text-center max-w-2xl mx-4">
-                  <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center mx-auto mb-6 shadow-lg animate-bounce-in">
-                    <span className="text-white font-bold text-2xl">EP</span>
+                  <div className="relative mx-auto mb-6 w-28 h-28 group">
+                    <img 
+                      src={elsaAvatarLarge} 
+                      alt="ELSA - Easyprint Learning & Support Assistant"
+                      className="elsa-avatar elsa-avatar-large w-full h-full rounded-full border-4 border-blue-200 shadow-2xl animate-bounce-in group-hover:border-blue-300"
+                      onError={(e) => {
+                        // Fallback to EP logo if image fails to load
+                        e.target.style.display = 'none'
+                        const fallback = e.target.nextElementSibling
+                        if (fallback) fallback.style.display = 'flex'
+                      }}
+                    />
+                    {/* Fallback avatar */}
+                    <div 
+                      className="w-full h-full bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center shadow-2xl animate-bounce-in" 
+                      style={{ display: 'none' }}
+                    >
+                      <span className="text-white font-bold text-2xl">EP</span>
+                    </div>
+                    {/* Subtle glow effect */}
+                    <div className="absolute inset-0 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 animate-glow-pulse blur-xl pointer-events-none"></div>
                   </div>
                   <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-3 animate-slide-up">
                     Hi, I'm ELSA! 👋
@@ -304,8 +326,25 @@ const Chat = () => {
                 {loadingState.isLoading && (
                   <div className="flex justify-start">
                     <div className="flex items-center space-x-3 max-w-md">
-                      <div className="w-8 h-8 bg-gray-300 rounded-full flex items-center justify-center flex-shrink-0">
-                        <span className="text-xs font-medium text-gray-600">AI</span>
+                      <div className="flex-shrink-0 w-10 h-10">
+                        <img 
+                          src={elsaAvatarMedium} 
+                          alt="ELSA is thinking..."
+                          className="elsa-avatar w-full h-full rounded-full border-2 border-blue-200 shadow-lg animate-pulse"
+                          onError={(e) => {
+                            // Fallback to text if image fails to load
+                            e.target.style.display = 'none'
+                            const fallback = e.target.nextElementSibling
+                            if (fallback) fallback.style.display = 'flex'
+                          }}
+                        />
+                        {/* Fallback avatar */}
+                        <div 
+                          className="w-full h-full bg-gray-300 rounded-full flex items-center justify-center flex-shrink-0" 
+                          style={{ display: 'none' }}
+                        >
+                          <span className="text-xs font-medium text-gray-600">AI</span>
+                        </div>
                       </div>
                       <div className="bg-white rounded-2xl px-4 py-3 shadow-sm border flex-1">
                         <div className="flex items-center space-x-3">

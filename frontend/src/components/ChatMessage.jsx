@@ -1,5 +1,7 @@
 import React, { useState } from 'react'
 import { ChatMessageFeedback } from './Feedback'
+import elsaAvatar from '../assets/images/elsa-avatar.png'
+import elsaAvatarSmall from '../assets/images/elsa-avatar-small.png'
 
 const ChatMessage = ({ message, onCitationClick }) => {
   const [copied, setCopied] = useState(false)
@@ -142,10 +144,25 @@ const ChatMessage = ({ message, onCitationClick }) => {
       <div className="flex items-end space-x-2 max-w-[85%] sm:max-w-xs lg:max-w-md xl:max-w-2xl relative">
         {/* Avatar for AI messages */}
         {!isUser && (
-          <div className="flex-shrink-0 w-8 h-8 bg-gray-400 rounded-full flex items-center justify-center mb-1">
-            <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-            </svg>
+          <div className="flex-shrink-0 w-10 h-10 mb-1 group">
+            <img 
+              src={elsaAvatarSmall} 
+              alt="ELSA - Easyprint Learning & Support Assistant"
+              className="elsa-avatar w-full h-full rounded-full border-2 border-blue-200 shadow-lg hover:shadow-xl hover:border-blue-300"
+              onError={(e) => {
+                // Fallback to initials if image fails to load
+                e.target.style.display = 'none'
+                const fallback = e.target.nextElementSibling
+                if (fallback) fallback.style.display = 'flex'
+              }}
+            />
+            {/* Fallback avatar */}
+            <div 
+              className="w-full h-full bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center shadow-lg" 
+              style={{ display: 'none' }}
+            >
+              <span className="text-white font-bold text-sm">ELSA</span>
+            </div>
           </div>
         )}
 

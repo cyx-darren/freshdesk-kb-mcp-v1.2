@@ -70,6 +70,26 @@
   }
 }
 
+@keyframes float-gentle {
+  0%, 100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-3px);
+  }
+}
+
+@keyframes glow-pulse {
+  0%, 100% {
+    opacity: 0.4;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.6;
+    transform: scale(1.05);
+  }
+}
+
 @keyframes slide-up {
   from {
     opacity: 0;
@@ -143,6 +163,32 @@
 
 .animate-modal-in {
   animation: modal-in 0.2s ease-out;
+}
+
+.animate-float-gentle {
+  animation: float-gentle 3s ease-in-out infinite;
+}
+
+.animate-glow-pulse {
+  animation: glow-pulse 2s ease-in-out infinite;
+}
+
+/* ELSA Avatar Styles */
+.elsa-avatar {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.elsa-avatar:hover {
+  transform: scale(1.05);
+  filter: brightness(1.1);
+}
+
+.elsa-avatar-large {
+  animation: float-gentle 4s ease-in-out infinite;
+}
+
+.elsa-avatar-large:hover {
+  animation-play-state: paused;
 }
 
 /* Custom scrollbar styles */
