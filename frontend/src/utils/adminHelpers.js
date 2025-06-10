@@ -4,26 +4,20 @@ import { useSupabase } from '../contexts/SupabaseContext.jsx'
 export const useAdminHelpers = () => {
   const { user, session, supabase } = useSupabase()
 
-  // Check if current user is admin (you can customize this logic)
+  // Check if current user is admin
   const isAdmin = () => {
     if (!user) return false
     
-    // Option 1: Check user metadata for admin role
+    // Check user metadata for admin role (set via Supabase Auth)
     const userRole = user.user_metadata?.role || user.app_metadata?.role
     if (userRole === 'admin' || userRole === 'moderator') {
       return true
     }
     
-    // Option 2: Check if user email is in admin list (customize this)
+    // Check if user email is in admin list
     const adminEmails = [
-      // Add your admin emails here
-      'admin@yourcompany.com',
-      'support@yourcompany.com',
-      // For development/testing - you can add your email here
-      'test@example.com',
-      'admin@test.com',
-      'nica@easyprintsg.com',// Add your actual email here (replace with your real email)
-      'darren@easyprintsg.com'  // Replace this with your actual email
+      'nica@easyprintsg.com',
+      'darren@easyprintsg.com'
     ]
     
     return adminEmails.includes(user.email)

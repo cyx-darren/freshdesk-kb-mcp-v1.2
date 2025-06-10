@@ -48,7 +48,7 @@ class FeedbackService {
     return result
   }
 
-  // Get all feedback submissions with pagination
+  // Get all feedback submissions with pagination and draft/publication status
   async getFeedbackSubmissions(options = {}) {
     if (!this.supabase) {
       return createApiResponse(false, null, 'Supabase client not initialized', 'Failed to get feedback')
@@ -68,9 +68,10 @@ class FeedbackService {
 
     const result = await handleApiCall(
       async () => {
+        // First get the main feedback data with count
         let query = this.supabase
-          .from('feedback_with_users') // Use the view for better data
-          .select('*')
+          .from('feedback_submissions')
+          .select('*', { count: 'exact' })
 
         // Apply filters
         if (status) {
@@ -88,13 +89,60 @@ class FeedbackService {
           .order(sortBy, { ascending: sortOrder === 'asc' })
           .range(offset, offset + limit - 1)
 
-        const { data, error, count } = await query
+        const { data: feedbackData, error, count } = await query
 
         if (error) throw error
 
+        // Now get draft counts for each feedback item
+        const feedbackIds = feedbackData?.map(item => item.id) || []
+        let draftCounts = {}
+        
+        if (feedbackIds.length > 0) {
+          try {
+            // First try the kb_articles_draft table (linked by feedback_id)
+            const { data: linkedDrafts, error: linkedError } = await this.supabase
+              .from('kb_articles_draft')
+              .select('feedback_id')
+              .in('feedback_id', feedbackIds)
+
+            if (!linkedError && linkedDrafts) {
+              linkedDrafts.forEach(draft => {
+                draftCounts[draft.feedback_id] = (draftCounts[draft.feedback_id] || 0) + 1
+              })
+            }
+
+            // Also check article_drafts table for drafts that might be linked by original_question
+            for (const feedback of feedbackData) {
+              if (feedback.question) {
+                const { data: questionDrafts, error: questionError } = await this.supabase
+                  .from('article_drafts')
+                  .select('id')
+                  .ilike('original_question', `%${feedback.question}%`)
+
+                if (!questionError && questionDrafts) {
+                  draftCounts[feedback.id] = (draftCounts[feedback.id] || 0) + questionDrafts.length
+                }
+              }
+            }
+          } catch (draftError) {
+            console.warn('Error fetching draft counts:', draftError)
+            // Continue with zero draft counts if table doesn't exist yet
+          }
+        }
+
+        // Enhance feedback data with draft information
+        const processedData = feedbackData?.map(item => ({
+          ...item,
+          draft_count: draftCounts[item.id] || 0,
+          has_published: false, // TODO: Add published article detection later
+          published_article_id: null,
+          published_article_title: null,
+          drafts: [] // TODO: Add actual draft data if needed
+        })) || []
+
         return { 
           data: {
-            feedback: data,
+            feedback: processedData,
             totalCount: count,
             page,
             limit,
@@ -102,7 +150,7 @@ class FeedbackService {
           }
         }
       },
-      'Get feedback submissions'
+      'Get feedback submissions with draft status'
     )
 
     return result
@@ -172,8 +220,17 @@ class FeedbackService {
   }
 
   // Update feedback status
-  async updateFeedbackStatus(feedbackId, status, assignedTo = null) {
+  async updateFeedbackStatus(feedbackId, status, assignedTo = null, publishedArticleId = null) {
+    console.log('[FEEDBACK_SERVICE] updateFeedbackStatus called with:', {
+      feedbackId,
+      status,
+      assignedTo,
+      publishedArticleId,
+      supabaseExists: !!this.supabase
+    })
+
     if (!this.supabase) {
+      console.error('[FEEDBACK_SERVICE] Supabase client not initialized')
       return createApiResponse(false, null, 'Supabase client not initialized', 'Failed to update feedback')
     }
 
@@ -181,9 +238,19 @@ class FeedbackService {
     if (assignedTo !== null) {
       updates.assigned_to = assignedTo
     }
+    if (publishedArticleId !== null) {
+      updates.published_article_id = publishedArticleId
+    }
+
+    console.log('[FEEDBACK_SERVICE] Preparing to update with:', {
+      feedbackId,
+      updates,
+      table: 'feedback_submissions'
+    })
 
     const result = await handleApiCall(
       async () => {
+        console.log('[FEEDBACK_SERVICE] Executing Supabase update...')
         const { data, error } = await this.supabase
           .from('feedback_submissions')
           .update(updates)
@@ -191,12 +258,19 @@ class FeedbackService {
           .select()
           .single()
 
+        console.log('[FEEDBACK_SERVICE] Supabase update result:', {
+          data,
+          error,
+          hasError: !!error
+        })
+
         if (error) throw error
         return { data }
       },
       'Update feedback status'
     )
 
+    console.log('[FEEDBACK_SERVICE] Final result:', result)
     return result
   }
 

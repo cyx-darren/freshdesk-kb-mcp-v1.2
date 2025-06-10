@@ -63,6 +63,20 @@ const AdminQuestions = () => {
     }
   }, [user])
 
+  // Refresh data when page comes back into focus (e.g., after publishing an article)
+  useEffect(() => {
+    const handleFocus = () => {
+      console.log('🔄 Page focused, refreshing feedback data...')
+      loadFeedback()
+    }
+
+    window.addEventListener('focus', handleFocus)
+    
+    return () => {
+      window.removeEventListener('focus', handleFocus)
+    }
+  }, [loadFeedback])
+
   // Handle logout
   const handleLogout = async () => {
     try {
@@ -101,6 +115,29 @@ const AdminQuestions = () => {
     })
   }
 
+  // Handle view drafts
+  const handleViewDrafts = (feedbackItem) => {
+    console.log('Viewing drafts for feedback:', feedbackItem.id)
+    navigate('/article-editor', {
+      state: {
+        fromAdminQuestions: true,
+        feedbackId: feedbackItem.id,
+        originalQuestion: feedbackItem.question,
+        aiResponse: feedbackItem.ai_response,
+        feedbackType: feedbackItem.feedback_type,
+        showDrafts: true
+      }
+    })
+  }
+
+  // Handle view published article
+  const handleViewArticle = (feedbackItem) => {
+    if (feedbackItem.published_article_id) {
+      // Open Freshdesk article in new tab
+      window.open(`https://easyprint.freshdesk.com/a/solutions/articles/${feedbackItem.published_article_id}`, '_blank')
+    }
+  }
+
   // Truncate text
   const truncateText = (text, maxLength = 60) => {
     if (!text) return ''
@@ -116,6 +153,55 @@ const AdminQuestions = () => {
       hour: '2-digit',
       minute: '2-digit'
     })
+  }
+
+  // Format draft count display
+  const formatDraftCount = (count, drafts = []) => {
+    if (count === 0) return ''
+    const draftTitles = drafts.map(draft => draft.title || 'Untitled').join(', ')
+    return {
+      display: count === 1 ? '1 draft' : `${count} drafts`,
+      title: `Drafts: ${draftTitles}`
+    }
+  }
+
+  // Get enhanced status display
+  const getEnhancedStatus = (item) => {
+    // Debug logging to see what data we're getting
+    if (item.question && item.question.toLowerCase().includes('minimum order') && item.question.toLowerCase().includes('fridge magnet')) {
+      console.log('[DEBUG] Fridge magnet question data:', {
+        id: item.id,
+        question: item.question,
+        status: item.status,
+        has_published: item.has_published,
+        published_article_id: item.published_article_id
+      })
+    }
+    
+    // Check if article has been published (either by has_published flag or by having a published_article_id and completed status)
+    if (item.has_published || (item.published_article_id && item.status === 'completed')) {
+      return {
+        display: '✅ Published',
+        className: 'bg-green-100 text-green-800',
+        tooltip: `Article published${item.published_article_id ? ` (ID: ${item.published_article_id})` : ''}`
+      }
+    }
+    
+    // If feedback type is "correct", no action needed
+    if (item.feedback_type === 'correct') {
+      return {
+        display: '', // Empty status for correct responses
+        className: '',
+        tooltip: 'AI response was marked as correct - no article needed'
+      }
+    }
+    
+    // Default status for incorrect and needs_improvement
+    return {
+      display: formatFeedbackStatus(item.status),
+      className: getFeedbackStatusColor(item.status),
+      tooltip: null
+    }
   }
 
   if (!user) {
@@ -152,6 +238,15 @@ const AdminQuestions = () => {
             </div>
             
             <div className="flex items-center space-x-4">
+              <button
+                onClick={() => {
+                  console.log('🔄 Manual refresh triggered')
+                  loadFeedback()
+                }}
+                className="px-3 py-2 text-sm bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors"
+              >
+                🔄 Refresh
+              </button>
               <button
                 onClick={() => navigate('/chat')}
                 className="px-3 py-2 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
@@ -297,10 +392,10 @@ const AdminQuestions = () => {
                       Type
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Created
+                      Status
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Status
+                      Drafts
                     </th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Assigned To
@@ -311,65 +406,121 @@ const AdminQuestions = () => {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {feedback.map((item) => (
-                    <tr 
-                      key={item.id}
-                      className="hover:bg-gray-50 cursor-pointer"
-                      onClick={() => handleRowClick(item)}
-                    >
-                      <td className="px-4 py-4">
-                        <div className="text-sm font-medium text-gray-900">
-                          {truncateText(item.question)}
-                        </div>
-                      </td>
-                      <td className="px-4 py-4">
-                        <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${getFeedbackTypeColor(item.feedback_type)}`}>
-                          {formatFeedbackType(item.feedback_type)}
-                        </span>
-                      </td>
-                      <td className="px-4 py-4 text-sm text-gray-500">
-                        {formatDate(item.created_at)}
-                      </td>
-                      <td className="px-4 py-4">
-                        <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${getFeedbackStatusColor(item.status)}`}>
-                          {formatFeedbackStatus(item.status)}
-                        </span>
-                      </td>
-                      <td className="px-4 py-4 text-sm text-gray-500">
-                        {item.assigned_to_email || 'Unassigned'}
-                      </td>
-                      <td className="px-4 py-4">
-                        <div className="flex space-x-2">
-                          {!item.assigned_to && (
+                  {feedback.map((item) => {
+                    const statusInfo = getEnhancedStatus(item)
+                    const draftInfo = formatDraftCount(item.draft_count || 0, item.drafts || [])
+                    const hasPublished = item.has_published || (item.published_article_id && item.status === 'completed')
+                    
+                    return (
+                      <tr 
+                        key={item.id}
+                        className={`hover:bg-gray-50 cursor-pointer ${hasPublished ? 'bg-green-50' : ''}`}
+                        onClick={() => handleRowClick(item)}
+                      >
+                        <td className="px-4 py-4">
+                          <div className="text-sm font-medium text-gray-900">
+                            {truncateText(item.question)}
+                          </div>
+                          <div className="text-xs text-gray-500 mt-1">
+                            {formatDate(item.created_at)}
+                          </div>
+                        </td>
+                        <td className="px-4 py-4">
+                          <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${getFeedbackTypeColor(item.feedback_type)}`}>
+                            {formatFeedbackType(item.feedback_type)}
+                          </span>
+                        </td>
+                        <td className="px-4 py-4">
+                          <span 
+                            className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${statusInfo.className}`}
+                            title={statusInfo.tooltip}
+                          >
+                            {statusInfo.display}
+                          </span>
+                        </td>
+                        <td className="px-4 py-4">
+                          {draftInfo && (
                             <button
                               onClick={(e) => {
                                 e.stopPropagation()
-                                handleClaimQuestion(item.id)
+                                handleViewDrafts(item)
                               }}
-                              className="px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors"
-                            >
-                              Claim
-                            </button>
-                          )}
-                          {(item.feedback_type === 'needs_improvement' || item.feedback_type === 'incorrect') && (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                handleCreateArticle(item)
-                              }}
-                              className="px-2 py-1 text-xs bg-green-100 text-green-700 rounded hover:bg-green-200 transition-colors flex items-center space-x-1"
-                              title="Create Knowledge Base Article"
+                              className="inline-flex items-center space-x-1 px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors"
+                              title={draftInfo.title}
                             >
                               <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                               </svg>
-                              <span>Create Article</span>
+                              <span>{draftInfo.display}</span>
                             </button>
                           )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                        </td>
+                        <td className="px-4 py-4 text-sm text-gray-500">
+                          {item.assigned_to_email || 'Unassigned'}
+                        </td>
+                        <td className="px-4 py-4">
+                          <div className="flex space-x-2">
+                            {!item.assigned_to && item.feedback_type !== 'correct' && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  handleClaimQuestion(item.id)
+                                }}
+                                className="px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors"
+                              >
+                                Claim
+                              </button>
+                            )}
+                            
+                            {/* Show different actions based on status */}
+                            {hasPublished ? (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  handleViewArticle(item)
+                                }}
+                                className="px-2 py-1 text-xs bg-green-100 text-green-700 rounded hover:bg-green-200 transition-colors flex items-center space-x-1"
+                                title={`View article: ${item.published_article_title || 'Untitled'}`}
+                              >
+                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                </svg>
+                                <span>View Article</span>
+                              </button>
+                            ) : item.draft_count > 0 ? (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  handleViewDrafts(item)
+                                }}
+                                className="px-2 py-1 text-xs bg-orange-100 text-orange-700 rounded hover:bg-orange-200 transition-colors flex items-center space-x-1"
+                                title="Edit existing drafts"
+                              >
+                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                </svg>
+                                <span>Edit Draft ({item.draft_count})</span>
+                              </button>
+                            ) : (item.feedback_type === 'needs_improvement' || item.feedback_type === 'incorrect') && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  handleCreateArticle(item)
+                                }}
+                                className="px-2 py-1 text-xs bg-green-100 text-green-700 rounded hover:bg-green-200 transition-colors flex items-center space-x-1"
+                                title="Create Knowledge Base Article"
+                              >
+                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                                </svg>
+                                <span>Create Article</span>
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
                 </tbody>
               </table>
             </div>

@@ -2,55 +2,33 @@ import React, { useState, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import Navigation from '../components/Navigation.jsx'
 import ArticleEditor from '../components/ArticleEditor.jsx'
+import DraftsManager from '../components/DraftsManager.jsx'
 
 const ArticleEditorPage = () => {
   const navigate = useNavigate()
   const location = useLocation()
-  const [isEditorOpen, setIsEditorOpen] = useState(false)
-  const [sampleData, setSampleData] = useState({
-    originalQuestion: "What is the minimum order quantity (MOQ) for custom lanyards?",
-    aiResponse: `<p>The minimum order quantity (MOQ) for custom lanyards varies depending on the type and customization options:</p>
-
-<h3>Standard Lanyards</h3>
-<ul>
-<li><strong>Polyester Lanyards:</strong> 100 pieces minimum</li>
-<li><strong>Nylon Lanyards:</strong> 100 pieces minimum</li>
-<li><strong>Cotton Lanyards:</strong> 250 pieces minimum</li>
-</ul>
-
-<h3>Premium Options</h3>
-<ul>
-<li><strong>Woven Lanyards:</strong> 500 pieces minimum</li>
-<li><strong>Leather Lanyards:</strong> 100 pieces minimum</li>
-<li><strong>Eco-friendly Lanyards:</strong> 250 pieces minimum</li>
-</ul>
-
-<h3>Customization Options</h3>
-<p>All lanyards can be customized with:</p>
-<ul>
-<li>Your company logo</li>
-<li>Custom text</li>
-<li>Choice of colors</li>
-<li>Various attachment options (badge clips, key rings, etc.)</li>
-</ul>
-
-<p><strong>Note:</strong> For orders below the MOQ, please contact our sales team for special pricing and availability.</p>`,
+  const [currentView, setCurrentView] = useState('editor') // 'editor' or 'drafts'
+  const [editorData, setEditorData] = useState({
+    originalQuestion: '',
+    aiResponse: '',
     initialDraft: null
   })
 
-  // Check for navigation state from AdminQuestions
+  // Check for navigation state from AdminQuestions or other sources
   useEffect(() => {
     if (location.state) {
-      const { originalQuestion, aiResponse, feedbackType, feedbackId } = location.state
-      if (originalQuestion) {
-        setSampleData({
-          originalQuestion,
+      const { originalQuestion, aiResponse, feedbackType, feedbackId, showDrafts } = location.state
+      if (originalQuestion || feedbackId) {
+        setEditorData({
+          originalQuestion: originalQuestion || '',
           aiResponse: aiResponse || '',
           feedbackType,
           feedbackId,
           initialDraft: null
         })
-        setIsEditorOpen(true) // Auto-open the editor
+        
+        // If showDrafts is true, start with drafts view
+        setCurrentView(showDrafts ? 'drafts' : 'editor')
         
         // Clear the navigation state to prevent reopening on refresh
         navigate(location.pathname, { replace: true })
@@ -58,204 +36,136 @@ const ArticleEditorPage = () => {
     }
   }, [location.state, navigate, location.pathname])
 
-  const handleOpenEditor = () => {
-    console.log('handleOpenEditor called - setting isEditorOpen to true')
-    setIsEditorOpen(true)
+  // Check if data was passed from admin questions
+  const isFromAdminQuestions = location.state?.feedbackId
+
+  const handleSwitchToEditor = (draftData = null) => {
+    if (draftData) {
+      setEditorData(prevData => ({
+        ...prevData, // Preserve existing data including feedbackId
+        originalQuestion: draftData.original_question || '',
+        aiResponse: draftData.ai_response || '',
+        initialDraft: draftData
+      }))
+    }
+    setCurrentView('editor')
+  }
+
+  const handleSwitchToDrafts = () => {
+    setCurrentView('drafts')
+  }
+
+  const handleEditDraft = (draft) => {
+    setEditorData(prevData => ({
+      ...prevData, // Preserve existing data including feedbackId
+      originalQuestion: draft.original_question || '',
+      aiResponse: draft.ai_response || '',
+      initialDraft: draft
+    }))
+    setCurrentView('editor')
   }
 
   const handleCloseEditor = () => {
-    setIsEditorOpen(false)
+    // If came from admin questions, go back there
+    if (isFromAdminQuestions) {
+      navigate('/admin/questions')
+    } else {
+      // Otherwise, allow switching between views
+      setCurrentView('drafts')
+    }
   }
-
-  const handleOpenWithDraft = () => {
-    setSampleData(prev => ({
-      ...prev,
-      initialDraft: {
-        id: 'draft-123',
-        title: 'Lanyard MOQ Guidelines',
-        content: prev.aiResponse,
-        category: 'products',
-        subcategory: 'lanyards',
-        tags: 'MOQ, lanyards, minimum order',
-        updated_at: new Date().toISOString()
-      }
-    }))
-    setIsEditorOpen(true)
-  }
-
-  // Show different content if coming from AdminQuestions
-  const isFromAdminQuestions = location.state?.feedbackId
 
   return (
     <div className="min-h-screen bg-gray-50">
       <Navigation />
       
-      <div className="max-w-4xl mx-auto p-6">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            {isFromAdminQuestions ? 'Create Knowledge Base Article' : 'Article Editor Demo'}
-          </h1>
-          <p className="text-gray-600">
-            {isFromAdminQuestions 
-              ? 'Create a comprehensive article to address the feedback question'
-              : 'Test the article editor component with sample data from a chat conversation.'
-            }
-          </p>
-          {isFromAdminQuestions && (
-            <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-              <div className="flex items-center space-x-2">
-                <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                <p className="text-sm text-blue-800">
-                  <span className="font-medium">From Admin Questions:</span> This question was marked as "{sampleData.feedbackType?.replace('_', ' ')}" and needs a knowledge base article.
-                </p>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Question Context - Always show if we have data */}
-        {(sampleData.originalQuestion || sampleData.aiResponse) && (
-          <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">
-              {isFromAdminQuestions ? 'Feedback Question Context' : 'Sample Chat Context'}
-            </h2>
-            
-            <div className="space-y-4">
-              <div className="border-l-4 border-blue-500 pl-4">
-                <h3 className="font-medium text-gray-900 mb-2">User Question:</h3>
-                <p className="text-gray-700">{sampleData.originalQuestion}</p>
-              </div>
+      {/* Page Header */}
+      <div className="bg-white border-b border-gray-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          {/* Breadcrumb */}
+          <div className="flex items-center space-x-2 py-2 text-sm text-gray-500">
+            <button 
+              onClick={() => navigate('/admin/questions')}
+              className="hover:text-gray-700 transition-colors"
+            >
+              Freshdesk KB
+            </button>
+            <span>›</span>
+            <span className="text-gray-900 font-medium">
+              {currentView === 'drafts' ? 'My Drafts' : 'Article Editor'}
+            </span>
+          </div>
+          
+          <div className="flex items-center justify-between h-16">
+            <div className="flex items-center space-x-4">
+              <h1 className="text-xl font-semibold text-gray-900">
+                {isFromAdminQuestions 
+                  ? 'Create Knowledge Base Article' 
+                  : 'Knowledge Base Article Editor'
+                }
+              </h1>
               
-              {sampleData.aiResponse && (
-                <div className="border-l-4 border-orange-500 pl-4">
-                  <h3 className="font-medium text-gray-900 mb-2">
-                    {isFromAdminQuestions ? 'Previous AI Response (needs improvement):' : 'AI Response:'}
-                  </h3>
-                  <div 
-                    className="text-gray-700 prose prose-sm max-w-none"
-                    dangerouslySetInnerHTML={{ __html: sampleData.aiResponse }}
-                  />
+              {/* Context indicator */}
+              {isFromAdminQuestions && (
+                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                  From Admin Questions
+                </span>
+              )}
+            </div>
+
+            {/* Navigation tabs - only show if not from admin questions */}
+            {!isFromAdminQuestions && (
+              <div className="flex items-center space-x-4">
+                <div className="flex rounded-lg border border-gray-300 overflow-hidden">
+                  <button
+                    onClick={() => handleSwitchToEditor()}
+                    className={`px-4 py-2 text-sm font-medium transition-colors ${
+                      currentView === 'editor'
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-white text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    📝 New Article
+                  </button>
+                  <button
+                    onClick={handleSwitchToDrafts}
+                    className={`px-4 py-2 text-sm font-medium transition-colors ${
+                      currentView === 'drafts'
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-white text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    📄 My Drafts
+                  </button>
                 </div>
-              )}
-            </div>
+              </div>
+            )}
           </div>
-        )}
+        </div>
+      </div>
 
-        {/* Action Buttons - Only show if not from admin questions or editor is closed */}
-        {(!isFromAdminQuestions || !isEditorOpen) && (
-          <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">
-              {isFromAdminQuestions ? 'Article Editor' : 'Test Article Editor'}
-            </h2>
-            
-            <div className="flex flex-wrap gap-4">
-              {isFromAdminQuestions ? (
-                <button
-                  onClick={handleOpenEditor}
-                  className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center space-x-2"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                  </svg>
-                  <span>Open Article Editor</span>
-                </button>
-              ) : (
-                <>
-                  <button
-                    onClick={handleOpenEditor}
-                    className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center space-x-2"
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                    </svg>
-                    <span>Create New Article</span>
-                  </button>
-                  
-                  <button
-                    onClick={handleOpenWithDraft}
-                    className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center space-x-2"
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                    </svg>
-                    <span>Edit Existing Draft</span>
-                  </button>
-                </>
-              )}
-              
-              <button
-                onClick={() => navigate(isFromAdminQuestions ? '/admin/questions' : '/chat')}
-                className="px-6 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors flex items-center space-x-2"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-                </svg>
-                <span>Back to {isFromAdminQuestions ? 'Admin Questions' : 'Chat'}</span>
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Features Overview - Only show for demo mode */}
-        {!isFromAdminQuestions && (
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">Article Editor Features</h2>
-            
-            <div className="grid md:grid-cols-2 gap-6">
-              <div>
-                <h3 className="font-medium text-gray-900 mb-2">Rich Text Editing</h3>
-                <ul className="text-sm text-gray-600 space-y-1">
-                  <li>• Bold, italic, highlight formatting</li>
-                  <li>• Headings and lists</li>
-                  <li>• Links and images</li>
-                  <li>• Live preview mode</li>
-                </ul>
-              </div>
-              
-              <div>
-                <h3 className="font-medium text-gray-900 mb-2">Knowledge Base Integration</h3>
-                <ul className="text-sm text-gray-600 space-y-1">
-                  <li>• Category and subcategory selection</li>
-                  <li>• Tag management</li>
-                  <li>• Freshdesk publishing</li>
-                  <li>• Draft saving to Supabase</li>
-                </ul>
-              </div>
-              
-              <div>
-                <h3 className="font-medium text-gray-900 mb-2">Context Preservation</h3>
-                <ul className="text-sm text-gray-600 space-y-1">
-                  <li>• Original question display</li>
-                  <li>• AI response reference</li>
-                  <li>• Auto-save functionality</li>
-                  <li>• Session persistence</li>
-                </ul>
-              </div>
-              
-              <div>
-                <h3 className="font-medium text-gray-900 mb-2">User Experience</h3>
-                <ul className="text-sm text-gray-600 space-y-1">
-                  <li>• Responsive design</li>
-                  <li>• Keyboard shortcuts</li>
-                  <li>• Loading states</li>
-                  <li>• Error handling</li>
-                </ul>
-              </div>
-            </div>
+      {/* Main Content */}
+      <div className="h-[calc(100vh-64px)]"> {/* 64px for header */}
+        {currentView === 'editor' ? (
+          <ArticleEditor
+            isOpen={true}
+            onClose={handleCloseEditor}
+            originalQuestion={editorData.originalQuestion}
+            aiResponse={editorData.aiResponse}
+            initialDraft={editorData.initialDraft}
+            feedbackId={editorData.feedbackId}
+          />
+        ) : (
+          <div className="h-full">
+            <DraftsManager
+              onEditDraft={handleEditDraft}
+              onClose={() => setCurrentView('editor')}
+              feedbackId={editorData.feedbackId}
+              originalQuestion={editorData.originalQuestion}
+            />
           </div>
         )}
       </div>
-
-      {/* Article Editor Modal */}
-      <ArticleEditor
-        isOpen={isEditorOpen}
-        onClose={handleCloseEditor}
-        originalQuestion={sampleData.originalQuestion}
-        aiResponse={sampleData.aiResponse}
-        initialDraft={sampleData.initialDraft}
-      />
     </div>
   )
 }

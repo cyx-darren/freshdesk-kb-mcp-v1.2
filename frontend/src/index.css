@@ -242,6 +242,36 @@
   color: #6b7280;
 }
 
+/* Article link styles for chat messages */
+.article-link {
+  @apply inline-flex items-center text-blue-600 hover:text-blue-800 transition-all duration-200;
+  text-decoration: underline;
+  text-decoration-color: rgba(37, 99, 235, 0.3);
+  text-underline-offset: 2px;
+  font-weight: 500;
+}
+
+.article-link:hover {
+  text-decoration: none;
+  transform: translateY(-1px);
+  filter: brightness(1.1);
+}
+
+.article-link svg {
+  @apply transition-transform duration-200;
+}
+
+.article-link:hover svg {
+  transform: translateX(1px) translateY(-1px);
+}
+
+/* Dark mode support for article links */
+@media (prefers-color-scheme: dark) {
+  .article-link {
+    @apply text-blue-400 hover:text-blue-300;
+  }
+}
+
 /* Mobile responsive utilities */
 @media (max-width: 640px) {
   .animate-slide-up {

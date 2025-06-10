@@ -27,13 +27,18 @@ import { chatService } from '../services/api.js'
 import LoadingDots from './LoadingDots.jsx'
 import CreateFolderModal from './CreateFolderModal.jsx'
 import RichTextToolbar from './RichTextToolbar.jsx'
+import DraftsManager from './DraftsManager.jsx'
+import PublishSuccessModal from './PublishSuccessModal.jsx'
+import PublishSuccessToast from './PublishSuccessToast.jsx'
+
 
 const ArticleEditor = ({ 
   isOpen, 
   onClose, 
   originalQuestion = '', 
   aiResponse = '', 
-  initialDraft = null 
+  initialDraft = null,
+  feedbackId = null
 }) => {
   const { user, supabase } = useSupabase()
   const [isLoading, setIsLoading] = useState(false)
@@ -41,6 +46,13 @@ const ArticleEditor = ({
   const [isPublishing, setIsPublishing] = useState(false)
   const [isDirty, setIsDirty] = useState(false)
   const [showPreview, setShowPreview] = useState(false)
+  const [showDraftsModal, setShowDraftsModal] = useState(false)
+  
+  // Success modal/toast state
+  const [showSuccessModal, setShowSuccessModal] = useState(false)
+  const [showSuccessToast, setShowSuccessToast] = useState(false)
+  const [publishedArticle, setPublishedArticle] = useState(null)
+
   const [folders, setFolders] = useState([])
   const [foldersLoading, setFoldersLoading] = useState(false)
   const [foldersError, setFoldersError] = useState(null)
@@ -266,6 +278,17 @@ const ArticleEditor = ({
     }
   }, [isOpen, initialDraft, editor])
 
+  // Debug feedbackId on component mount
+  useEffect(() => {
+    console.log('[ARTICLE_EDITOR] Component mounted/updated with props:', {
+      isOpen,
+      originalQuestion,
+      aiResponse,
+      initialDraft: initialDraft?.id,
+      feedbackId
+    })
+  }, [isOpen, originalQuestion, aiResponse, initialDraft, feedbackId])
+
   // handleSaveDraft function - defined early to be used in useEffect dependencies
   const handleSaveDraft = useCallback(async (silent = false) => {
     if (!user || !editor) return
@@ -479,6 +502,27 @@ const ArticleEditor = ({
     // refreshFolders()
   }
 
+
+
+  // Handle editing a draft
+  const handleEditDraft = (draft) => {
+    setCurrentDraftId(draft.id)
+    setTitle(draft.title || '')
+    setSelectedFolderId(draft.folder_id || '')
+    setTags(draft.tags || '')
+    setSeoTitle(draft.seo_title || '')
+    setSeoDescription(draft.seo_description || '')
+    
+    // Load content into editor
+    if (editor && draft.content) {
+      editor.commands.setContent(draft.content)
+    }
+    
+    // Close drafts modal and switch to editor
+    setShowDraftsModal(false)
+    setIsDirty(false)
+  }
+
   // Group folders by category for hierarchical display
   const groupedFolders = useMemo(() => {
     return folders.reduce((groups, folder) => {
@@ -541,9 +585,62 @@ const ArticleEditor = ({
             })
             .eq('id', currentDraftId)
         }
+
+        // Update feedback submission status if we have a feedbackId
+        console.log('[PUBLISH] Starting feedback status update check:', {
+          feedbackIdExists: !!feedbackId,
+          feedbackIdValue: feedbackId,
+          feedbackIdType: typeof feedbackId,
+          responseArticleId: response.article?.id,
+          responseSuccess: response.success
+        })
         
-        alert(`Article published successfully! Article ID: ${response.article?.id || 'Unknown'}`)
-        onClose()
+        if (feedbackId) {
+          try {
+            console.log('[PUBLISH] Updating feedback submission status:', {
+              feedbackId,
+              status: 'completed',
+              articleId: response.article?.id
+            })
+            
+            // Import the feedback service
+            const feedbackService = (await import('../services/feedback.js')).default
+            console.log('[PUBLISH] FeedbackService imported successfully:', !!feedbackService)
+            
+            const updateResult = await feedbackService.updateFeedbackStatus(
+              feedbackId, 
+              'completed', 
+              null, 
+              response.article?.id
+            )
+            
+            console.log('[PUBLISH] Feedback status update result:', updateResult)
+            
+            if (!updateResult.success) {
+              console.error('[PUBLISH] Failed to update feedback status:', updateResult.message)
+              alert(`Warning: Article published successfully but failed to update feedback status: ${updateResult.message}`)
+            } else {
+              console.log('[PUBLISH] ✅ Successfully updated feedback status to completed')
+            }
+          } catch (updateError) {
+            console.error('[PUBLISH] Error updating feedback submission status:', updateError)
+            alert(`Warning: Article published successfully but error updating feedback status: ${updateError.message}`)
+          }
+        } else {
+          console.warn('[PUBLISH] ❌ No feedbackId provided, skipping feedback status update:', {
+            feedbackIdValue: feedbackId,
+            originalQuestion,
+            propsReceived: { isOpen, originalQuestion, aiResponse, initialDraft, feedbackId }
+          })
+        }
+        
+        // Store published article data and show success modal
+        setPublishedArticle({
+          id: response.article?.id,
+          title: title.trim(),
+          url: `https://easyprint.freshdesk.com/a/solutions/articles/${response.article?.id}`
+        })
+        setShowSuccessModal(true)
       } else {
         throw new Error(response.message || 'Failed to publish article')
       }
@@ -555,7 +652,37 @@ const ArticleEditor = ({
     }
   }
 
+  // Success modal handlers
+  const handleSuccessModalClose = () => {
+    setShowSuccessModal(false)
+    setPublishedArticle(null)
+  }
 
+  const handleCreateAnother = () => {
+    // Clear the editor for a new article
+    setTitle('')
+    setSelectedFolderId('')
+    setTags('')
+    setSeoTitle('')
+    setSeoDescription('')
+    setCurrentDraftId(null)
+    setLastSaved(null)
+    setValidationErrors({})
+    setIsDirty(false)
+    editor?.commands.setContent('<p>Start writing your article here...</p>')
+    
+    // Close success modal
+    handleSuccessModalClose()
+  }
+
+  const handleBackToQuestions = () => {
+    handleSuccessModalClose()
+    // Use setTimeout to ensure modal is closed before navigation
+    setTimeout(() => {
+      // Force a full page reload to ensure fresh data
+      window.location.href = '/admin/questions'
+    }, 100)
+  }
 
   // Helper function to render form field with error
   const renderFormField = (id, label, children, required = false, error = null) => (
@@ -579,7 +706,7 @@ const ArticleEditor = ({
   // Early error boundary - if editor fails to initialize, show a fallback
   if (isOpen && !editor) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50">
+      <div className="h-full flex items-center justify-center p-4 bg-gray-50">
         <div className="bg-white rounded-xl shadow-2xl p-8 max-w-md">
           <h2 className="text-xl font-semibold text-gray-900 mb-4">Loading Editor...</h2>
           <p className="text-gray-600 mb-4">The rich text editor is initializing. Please wait...</p>
@@ -595,57 +722,64 @@ const ArticleEditor = ({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50 animate-fade-in">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-7xl max-h-[95vh] flex flex-col animate-modal-in">
+    <div className="h-full bg-white flex flex-col">
+      <div className="bg-white w-full h-full flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-indigo-50">
-          <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center shadow-md">
-              <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-              </svg>
-            </div>
-            <div>
-              <h2 className="text-xl font-semibold text-gray-900">📝 Knowledge Base Article Editor</h2>
-              <div className="flex items-center space-x-2 text-sm text-gray-600">
-                <span>Create and publish to Freshdesk</span>
-                {lastSaved && (
-                  <>
-                    <span>•</span>
-                    <span className="text-green-600">💾 Last saved: {lastSaved.toLocaleTimeString()}</span>
-                  </>
-                )}
-                {isSaving && (
-                  <>
-                    <span>•</span>
-                    <span className="text-blue-600 flex items-center gap-1">
-                      <LoadingDots />
-                      Saving draft...
-                    </span>
-                  </>
-                )}
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center shadow-md">
+                <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+              </div>
+              <div>
+                <h2 className="text-xl font-semibold text-gray-900">📝 Knowledge Base Article Editor</h2>
+                <div className="flex items-center space-x-2 text-sm text-gray-600">
+                  <span>Create and publish to Freshdesk</span>
+                  {lastSaved && (
+                    <>
+                      <span>•</span>
+                      <span className="text-green-600">💾 Last saved: {lastSaved.toLocaleTimeString()}</span>
+                    </>
+                  )}
+                  {isSaving && (
+                    <>
+                      <span>•</span>
+                      <span className="text-blue-600 flex items-center gap-1">
+                        <LoadingDots />
+                        Saving draft...
+                      </span>
+                    </>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
-          
-          <div className="flex items-center space-x-3">
-            <button
-              onClick={() => setShowPreview(!showPreview)}
-              className="px-4 py-2 text-sm bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors shadow-sm"
-            >
-              {showPreview ? '✏️ Edit' : '👁️ Preview'}
-            </button>
             
-            <button
-              onClick={handleClose}
-              className="p-2 text-gray-400 hover:text-gray-600 hover:bg-white hover:bg-opacity-80 rounded-lg transition-colors"
-              title="Close (Esc)"
-            >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
+            <div className="flex items-center space-x-3">
+              <button
+                onClick={() => setShowDraftsModal(true)}
+                className="px-4 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors shadow-sm font-medium"
+              >
+                📄 View Drafts
+              </button>
+              
+              <button
+                onClick={() => setShowPreview(!showPreview)}
+                className="px-4 py-2 text-sm bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors shadow-sm"
+              >
+                {showPreview ? '✏️ Edit' : '👁️ Preview'}
+              </button>
+              
+              <button
+                onClick={handleClose}
+                className="p-2 text-gray-400 hover:text-gray-600 hover:bg-white hover:bg-opacity-80 rounded-lg transition-colors"
+                title="Close (Esc)"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
         </div>
 
         {/* Content */}
@@ -1123,6 +1257,38 @@ const ArticleEditor = ({
         onFolderCreated={handleFolderCreated}
         categories={categories}
         folders={folders}
+      />
+
+      {/* Drafts Modal */}
+      {showDraftsModal && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black bg-opacity-50">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-6xl max-h-[90vh] flex flex-col">
+            <DraftsManager 
+              onEditDraft={handleEditDraft}
+              onClose={() => setShowDraftsModal(false)}
+              feedbackId={feedbackId}
+              originalQuestion={originalQuestion}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Success Modal */}
+      <PublishSuccessModal
+        isOpen={showSuccessModal}
+        onClose={handleSuccessModalClose}
+        articleTitle={publishedArticle?.title || ''}
+        articleId={publishedArticle?.id}
+        onCreateAnother={handleCreateAnother}
+        onBackToQuestions={handleBackToQuestions}
+      />
+
+      {/* Success Toast (alternative to modal) */}
+      <PublishSuccessToast
+        isVisible={showSuccessToast}
+        onClose={() => setShowSuccessToast(false)}
+        articleTitle={publishedArticle?.title || ''}
+        articleId={publishedArticle?.id}
       />
     </div>
   )

@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useSupabase } from '../contexts/SupabaseContext.jsx'
+import TestModal from '../components/TestModal.jsx'
 
 const AdminQuestionsTest = () => {
   const { user, logout } = useSupabase()
   const navigate = useNavigate()
   const [feedback, setFeedback] = useState([])
   const [loading, setLoading] = useState(true)
+  const [showTestModal, setShowTestModal] = useState(false)
 
   const mockFeedback = [
     {
@@ -61,6 +63,13 @@ const AdminQuestionsTest = () => {
             </div>
             <div className="flex items-center space-x-4">
               <button
+                onClick={() => setShowTestModal(true)}
+                className="px-3 py-2 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                title="Test Article Links"
+              >
+                Test Article Links
+              </button>
+              <button
                 onClick={() => navigate('/chat')}
                 className="px-3 py-2 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
               >
@@ -76,6 +85,9 @@ const AdminQuestionsTest = () => {
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
           <p className="text-blue-800 text-sm font-medium">🎯 Success! You've accessed the admin dashboard!</p>
           <p className="text-blue-700 text-sm mt-1">This shows the admin questions interface is working properly.</p>
+          <p className="text-blue-700 text-sm mt-2">
+            <strong>New Feature:</strong> Click "Test Article Links" to test the new clickable article references!
+          </p>
         </div>
 
         <div className="bg-white rounded-lg shadow-sm border overflow-hidden">
@@ -136,6 +148,12 @@ const AdminQuestionsTest = () => {
           )}
         </div>
       </div>
+
+      {/* Test Modal */}
+      <TestModal 
+        isOpen={showTestModal} 
+        onClose={() => setShowTestModal(false)} 
+      />
     </div>
   )
 }

@@ -15,34 +15,60 @@ const ChatMessage = ({ message, onCitationClick }) => {
 
   // Parse text for article citations and make them clickable
   const parseTextWithCitations = (text) => {
-    // Pattern to match citations like [Article 123] or [ID: 456]
+    // Pattern to match existing citations like [Article 123] or [ID: 456]
     const citationPattern = /\[(?:Article\s+)?(?:ID:\s*)?(\d+)\]/gi
+    // Pattern to match article references like "Article #123456" or "article #123456"
+    const articleRefPattern = /\b(?:Article|article)\s*#(\d+)/gi
     
     const parts = []
     let lastIndex = 0
+    
+    // Create a combined pattern to find all matches in order
+    const combinedPattern = /(\[(?:Article\s+)?(?:ID:\s*)?(\d+)\])|(\b(?:Article|article)\s*#(\d+))/gi
     let match
 
-    while ((match = citationPattern.exec(text)) !== null) {
-      // Add text before citation
+    while ((match = combinedPattern.exec(text)) !== null) {
+      // Add text before the match
       if (match.index > lastIndex) {
         parts.push(text.slice(lastIndex, match.index))
       }
       
-      // Add clickable citation
-      const articleId = match[1]
-      parts.push(
-        <button
-          key={`citation-${match.index}`}
-          onClick={() => onCitationClick && onCitationClick(articleId)}
-          className="inline-flex items-center px-2 py-1 mx-0.5 sm:mx-1 text-xs bg-blue-100 text-blue-800 rounded-md hover:bg-blue-200 transition-colors cursor-pointer border border-blue-300 touch-manipulation"
-          title={`View Article ${articleId}`}
-        >
-          <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-          </svg>
-          Article {articleId}
-        </button>
-      )
+      if (match[1]) {
+        // This is a citation pattern like [Article 123] - render as button for modal
+        const articleId = match[2]
+        parts.push(
+          <button
+            key={`citation-${match.index}`}
+            onClick={() => onCitationClick && onCitationClick(articleId)}
+            className="inline-flex items-center px-2 py-1 mx-0.5 sm:mx-1 text-xs bg-blue-100 text-blue-800 rounded-md hover:bg-blue-200 transition-colors cursor-pointer border border-blue-300 touch-manipulation"
+            title={`View Article ${articleId}`}
+          >
+            <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            Article {articleId}
+          </button>
+        )
+      } else if (match[3]) {
+        // This is an article reference pattern like "Article #123456" - render as external link
+        const articleId = match[4]
+        const originalText = match[3] // The full matched text like "Article #123456"
+        parts.push(
+                     <a
+             key={`article-link-${match.index}`}
+             href={`https://easyprint.freshdesk.com/a/solutions/articles/${articleId}`}
+             target="_blank"
+             rel="noopener noreferrer"
+             className="article-link"
+             title={`Open ${originalText} in Freshdesk`}
+           >
+            {originalText}
+            <svg className="w-3 h-3 ml-1 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+            </svg>
+          </a>
+        )
+      }
       
       lastIndex = match.index + match[0].length
     }

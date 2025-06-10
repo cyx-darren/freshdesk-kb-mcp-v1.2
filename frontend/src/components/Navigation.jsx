@@ -8,7 +8,7 @@ function Navigation() {
   const { user, signOut, loading } = useSupabase()
   
   const navigation = [
-    { name: 'Home', href: '/', current: location.pathname === '/' },
+    { name: 'Questions', href: '/admin/questions', current: location.pathname === '/admin/questions' },
     { name: 'Chat', href: '/chat', current: location.pathname === '/chat' },
     { name: 'Search', href: '/search', current: location.pathname === '/search' },
   ]
@@ -42,7 +42,7 @@ function Navigation() {
         <div className="flex justify-between h-16">
           <div className="flex">
             <div className="flex-shrink-0 flex items-center">
-              <Link to="/" className="text-xl font-bold text-gray-900">
+              <Link to="/admin/questions" className="text-xl font-bold text-gray-900">
                 Freshdesk KB
               </Link>
             </div>
