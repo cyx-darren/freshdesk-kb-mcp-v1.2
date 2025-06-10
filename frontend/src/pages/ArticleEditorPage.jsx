@@ -59,6 +59,7 @@ const ArticleEditorPage = () => {
   }, [location.state, navigate, location.pathname])
 
   const handleOpenEditor = () => {
+    console.log('handleOpenEditor called - setting isEditorOpen to true')
     setIsEditorOpen(true)
   }
 

@@ -390,10 +390,46 @@ class MCPClient {
       
       const result = await this.callFunction('list_categories', {})
       
+      // Parse the response similar to listAllFolders
+      let parsedResult = result
+      if (typeof result === 'string') {
+        try {
+          parsedResult = JSON.parse(result)
+        } catch (parseError) {
+          console.error('[MCP] Failed to parse categories response:', parseError.message)
+          throw new Error('Invalid response format from MCP server')
+        }
+      }
+      
+      // Handle MCP server content format
+      let categoriesData = []
+      if (parsedResult.content && Array.isArray(parsedResult.content) && parsedResult.content[0]?.text) {
+        const contentText = parsedResult.content[0].text
+        console.log('[MCP] Categories content received, parsing...')
+        
+        // The categories come as formatted text, we need to extract from the list_all_folders call instead
+        // For now, return empty but let's get from list_all_folders
+        try {
+          const foldersResult = await this.listAllFolders()
+          if (foldersResult.success && foldersResult.categories) {
+            categoriesData = foldersResult.categories
+            console.log(`[MCP] Extracted ${categoriesData.length} categories from folders data`)
+          }
+        } catch (folderError) {
+          console.error('[MCP] Failed to get categories from folders:', folderError.message)
+        }
+      } else if (parsedResult.categories && Array.isArray(parsedResult.categories)) {
+        categoriesData = parsedResult.categories
+      } else if (Array.isArray(parsedResult)) {
+        categoriesData = parsedResult
+      }
+      
+      console.log(`[MCP] Categories list completed: ${categoriesData.length} categories found`)
+      
       return {
         success: true,
-        categories: result.categories || result,
-        count: result.categories?.length || 0,
+        categories: categoriesData,
+        count: categoriesData.length,
         timestamp: new Date().toISOString()
       }
       
@@ -516,11 +552,58 @@ class MCPClient {
 
       const result = await this.callFunction('create_article', mcpArticleData)
       
-      console.log(`[MCP] Article created successfully: ${result.id || 'Unknown ID'}`)
+      console.log('[MCP] Raw result from create_article:', JSON.stringify(result, null, 2))
+      
+      // Parse the response properly
+      let createdArticle = null
+      let articleId = null
+      
+      if (result.content && Array.isArray(result.content) && result.content[0]?.text) {
+        const content = result.content[0].text
+        console.log('[MCP] Content response:', content)
+        
+        if (content.includes('✅ **Article Created Successfully!**')) {
+          // Extract article ID from success message
+          const articleIdMatch = content.match(/🆔 \*\*Article ID\*\*: (\d+)/)
+          if (articleIdMatch) {
+            articleId = parseInt(articleIdMatch[1])
+            
+            // Create article data object
+            createdArticle = {
+              id: articleId,
+              title: mcpArticleData.title,
+              folder_id: mcpArticleData.folder_id,
+              status: mcpArticleData.status,
+              tags: mcpArticleData.tags || []
+            }
+            
+            // Extract other details if available
+            const titleMatch = content.match(/📝 \*\*Title\*\*: (.+)/)
+            if (titleMatch) {
+              createdArticle.title = titleMatch[1]
+            }
+            
+            const statusMatch = content.match(/📊 \*\*Status\*\*: (.+)/)
+            if (statusMatch) {
+              createdArticle.status_text = statusMatch[1]
+            }
+          }
+        } else {
+          // Error response
+          console.error('[MCP] Error in article creation:', content)
+          throw new Error(content || 'Failed to create article')
+        }
+      } else if (result.id) {
+        // Direct response format
+        createdArticle = result
+        articleId = result.id
+      }
+      
+      console.log(`[MCP] Article created successfully: ${articleId || 'Unknown ID'}`)
       
       return {
         success: true,
-        article: result,
+        article: createdArticle,
         timestamp: new Date().toISOString()
       }
       
@@ -623,6 +706,99 @@ class MCPClient {
       configured: isProduction ? !!this.mcpServerUrl : !!this.mcpServerPath,
       environment: this.nodeEnv,
       timestamp: new Date().toISOString()
+    }
+  }
+
+  /**
+   * Create a new folder in Freshdesk knowledge base
+   * @param {object} folderData - Folder data
+   * @returns {Promise<object>} - Created folder information
+   */
+  async createFolder(folderData) {
+    try {
+      const { name, description, category_id, parent_folder_id, visibility } = folderData
+      
+      console.log('[MCP] Creating folder:', { 
+        name, 
+        category_id, 
+        parent_folder_id, 
+        visibility,
+        folderData: JSON.stringify(folderData)
+      })
+      
+      const result = await this.callFunction('create_folder', {
+        name,
+        description,
+        category_id,
+        parent_folder_id,
+        visibility
+      })
+      
+      console.log('[MCP] Raw result from create_folder:', JSON.stringify(result, null, 2))
+      
+      // Parse the JSON response if it's a string
+      let parsedResult = result
+      if (typeof result === 'string') {
+        try {
+          parsedResult = JSON.parse(result)
+        } catch (parseError) {
+          console.error('[MCP] Failed to parse folder creation response:', parseError.message)
+          throw new Error('Invalid response format from MCP server')
+        }
+      }
+      
+      // Handle different response formats
+      let responseData = parsedResult  // Renamed from folderData to avoid conflict
+      if (parsedResult.content && Array.isArray(parsedResult.content) && parsedResult.content[0]?.text) {
+        // If the response is in content format, try to parse it
+        const content = parsedResult.content[0].text
+        console.log('[MCP] Content response:', content)
+        
+        if (content.includes('✅ **Folder Created Successfully!**')) {
+          // Success response - extract folder data if available
+          if (parsedResult.folder) {
+            responseData = parsedResult
+          } else {
+            // Extract folder ID from success message if available
+            const folderIdMatch = content.match(/\*\*ID\*\*: (\d+)/)
+            if (folderIdMatch) {
+              responseData = {
+                success: true,
+                folder: {
+                  id: parseInt(folderIdMatch[1]),
+                  name: name,
+                  category_id: category_id,
+                  parent_folder_id: parent_folder_id,
+                  visibility: visibility || 2
+                }
+              }
+            } else {
+              responseData = { success: true, message: 'Folder created successfully' }
+            }
+          }
+        } else {
+          // Error response
+          console.error('[MCP] Error in folder creation:', content)
+          throw new Error(content || 'Failed to create folder')
+        }
+      }
+      
+      console.log('[MCP] Folder creation completed:', responseData.success ? 'Success' : 'Failed')
+      console.log('[MCP] Final response data:', JSON.stringify(responseData, null, 2))
+      
+      return {
+        success: responseData.success || true,
+        folder: responseData.folder || null,
+        message: responseData.message || 'Folder created successfully',
+        timestamp: new Date().toISOString()
+      }
+      
+    } catch (error) {
+      console.error('[MCP] Folder creation failed:', error.message)
+      console.error('[MCP] Error stack:', error.stack)
+      
+      // Return error information
+      throw new Error(`Failed to create folder: ${error.message}`)
     }
   }
 }

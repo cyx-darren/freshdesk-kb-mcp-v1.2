@@ -256,6 +256,16 @@ export const chatService = {
       console.error('Create article error:', error)
       throw error
     }
+  },
+
+  async createFolder(folderData) {
+    try {
+      const response = await api.post('/api/articles/folders/create', folderData)
+      return response.data
+    } catch (error) {
+      console.error('Create folder error:', error)
+      throw error
+    }
   }
 }
 

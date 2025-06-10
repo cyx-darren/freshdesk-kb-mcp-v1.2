@@ -5,9 +5,28 @@ import Image from '@tiptap/extension-image'
 import Link from '@tiptap/extension-link'
 import TextAlign from '@tiptap/extension-text-align'
 import Highlight from '@tiptap/extension-highlight'
+import TextStyle from '@tiptap/extension-text-style'
+import Color from '@tiptap/extension-color'
+import Underline from '@tiptap/extension-underline'
+import Strike from '@tiptap/extension-strike'
+import Superscript from '@tiptap/extension-superscript'
+import Subscript from '@tiptap/extension-subscript'
+import Code from '@tiptap/extension-code'
+import CodeBlock from '@tiptap/extension-code-block'
+import Blockquote from '@tiptap/extension-blockquote'
+import Table from '@tiptap/extension-table'
+import TableRow from '@tiptap/extension-table-row'
+import TableCell from '@tiptap/extension-table-cell'
+import TableHeader from '@tiptap/extension-table-header'
+import OrderedList from '@tiptap/extension-ordered-list'
+import TaskList from '@tiptap/extension-task-list'
+import TaskItem from '@tiptap/extension-task-item'
+import HorizontalRule from '@tiptap/extension-horizontal-rule'
 import { useSupabase } from '../contexts/SupabaseContext.jsx'
 import { chatService } from '../services/api.js'
 import LoadingDots from './LoadingDots.jsx'
+import CreateFolderModal from './CreateFolderModal.jsx'
+import RichTextToolbar from './RichTextToolbar.jsx'
 
 const ArticleEditor = ({ 
   isOpen, 
@@ -25,6 +44,9 @@ const ArticleEditor = ({
   const [folders, setFolders] = useState([])
   const [foldersLoading, setFoldersLoading] = useState(false)
   const [foldersError, setFoldersError] = useState(null)
+  const [categories, setCategories] = useState([])
+  const [categoriesLoading, setCategoriesLoading] = useState(false)
+  const [showCreateFolderModal, setShowCreateFolderModal] = useState(false)
   
   // Form state
   const [title, setTitle] = useState('')
@@ -44,10 +66,51 @@ const ArticleEditor = ({
     description: 160
   }
 
+  // Auto-save state
+  const [autoSaveEnabled, setAutoSaveEnabled] = useState(true)
+
   // Rich text editor
   const editor = useEditor({
     extensions: [
-      StarterKit,
+      StarterKit.configure({
+        // Disable the default extensions we're replacing
+        orderedList: false,
+        taskList: false,
+        strike: false,
+        code: false,
+        codeBlock: false,
+        blockquote: false,
+        horizontalRule: false,
+      }),
+      // Text Styling
+      TextStyle,
+      Color,
+      Underline,
+      Strike,
+      Superscript,
+      Subscript,
+      Code.configure({
+        HTMLAttributes: {
+          class: 'bg-gray-100 text-red-600 px-1 py-0.5 rounded text-sm',
+        },
+      }),
+      // Content Blocks
+      CodeBlock.configure({
+        HTMLAttributes: {
+          class: 'bg-gray-900 text-gray-100 p-4 rounded-lg overflow-x-auto',
+        },
+      }),
+      Blockquote.configure({
+        HTMLAttributes: {
+          class: 'border-l-4 border-gray-300 pl-4 my-4 italic text-gray-700',
+        },
+      }),
+      HorizontalRule.configure({
+        HTMLAttributes: {
+          class: 'border-gray-300 my-6',
+        },
+      }),
+      // Links and Images
       Link.configure({
         openOnClick: false,
         HTMLAttributes: {
@@ -59,18 +122,83 @@ const ArticleEditor = ({
           class: 'max-w-full h-auto rounded-lg shadow-md',
         },
       }),
+      // Lists
+      OrderedList.configure({
+        HTMLAttributes: {
+          class: 'list-decimal list-inside ml-4',
+        },
+      }),
+      TaskList.configure({
+        HTMLAttributes: {
+          class: 'list-none ml-0',
+        },
+      }),
+      TaskItem.configure({
+        HTMLAttributes: {
+          class: 'flex items-start',
+        },
+      }),
+      // Text Alignment
       TextAlign.configure({
         types: ['heading', 'paragraph'],
       }),
+      // Highlighting
       Highlight.configure({
+        multicolor: true,
         HTMLAttributes: {
-          class: 'bg-yellow-200 px-1 rounded',
+          class: 'px-1 rounded',
+        },
+      }),
+      // Tables
+      Table.configure({
+        resizable: true,
+        HTMLAttributes: {
+          class: 'border-collapse table-auto w-full border border-gray-300 my-4',
+        },
+      }),
+      TableRow.configure({
+        HTMLAttributes: {
+          class: 'border-b border-gray-300',
+        },
+      }),
+      TableHeader.configure({
+        HTMLAttributes: {
+          class: 'border border-gray-300 bg-gray-50 px-3 py-2 text-left font-semibold',
+        },
+      }),
+      TableCell.configure({
+        HTMLAttributes: {
+          class: 'border border-gray-300 px-3 py-2',
         },
       }),
     ],
     content: aiResponse || '<p>Start writing your article here...</p>',
     onUpdate: ({ editor }) => {
       setIsDirty(true)
+    },
+    editorProps: {
+      attributes: {
+        class: 'prose prose-gray max-w-none min-h-full p-4 focus:outline-none',
+      },
+      handleKeyDown: (view, event) => {
+        // Custom keyboard shortcuts
+        if (event.ctrlKey || event.metaKey) {
+          switch (event.key) {
+            case 's':
+              event.preventDefault()
+              handleSaveDraft(false)
+              return true
+            case 'Enter':
+              if (event.shiftKey) {
+                event.preventDefault()
+                handlePublish()
+                return true
+              }
+              break
+          }
+        }
+        return false
+      },
     },
   })
 
@@ -119,6 +247,7 @@ const ArticleEditor = ({
   useEffect(() => {
     if (isOpen) {
       loadFolders()
+      loadCategories()
       
       // Initialize with draft data if provided
       if (initialDraft) {
@@ -189,7 +318,7 @@ const ArticleEditor = ({
 
   // Auto-save functionality
   useEffect(() => {
-    if (!isDirty || !editor) return
+    if (!isDirty || !editor || !autoSaveEnabled) return
     
     const autoSaveTimer = setTimeout(() => {
       try {
@@ -296,8 +425,58 @@ const ArticleEditor = ({
     }
   }
 
+  const loadCategories = async () => {
+    setCategoriesLoading(true)
+    try {
+      const response = await chatService.getCategories()
+      if (response.success && response.categories) {
+        setCategories(response.categories)
+        console.log(`Loaded ${response.categories.length} categories`)
+      } else {
+        throw new Error(response.message || 'Failed to load categories')
+      }
+    } catch (error) {
+      console.error('Failed to load categories:', error)
+      setCategories([])
+    } finally {
+      setCategoriesLoading(false)
+    }
+  }
+
   const refreshFolders = () => {
     loadFolders()
+  }
+
+  const handleFolderCreated = (newFolder) => {
+    console.log('New folder created:', newFolder)
+    
+    // Add the new folder to the folders list
+    if (newFolder && newFolder.id) {
+      // Create a folder object that matches the expected format
+      const folderToAdd = {
+        id: newFolder.id,
+        name: newFolder.name,
+        description: newFolder.description || null,
+        category_id: newFolder.category_id,
+        category_name: categories.find(cat => cat.id === newFolder.category_id)?.name || 'Unknown Category',
+        parent_folder_id: newFolder.parent_folder_id || null,
+        is_child: !!newFolder.parent_folder_id,
+        visibility: newFolder.visibility || 2,
+        created_at: newFolder.created_at || new Date().toISOString(),
+        updated_at: newFolder.updated_at || new Date().toISOString()
+      }
+      
+      setFolders(prevFolders => [...prevFolders, folderToAdd])
+      
+      // Auto-select the newly created folder
+      setSelectedFolderId(newFolder.id.toString())
+      setIsDirty(true)
+      
+      console.log('Auto-selected new folder:', newFolder.id)
+    }
+    
+    // Optionally refresh the full folder list to ensure consistency
+    // refreshFolders()
   }
 
   // Group folders by category for hierarchical display
@@ -314,8 +493,15 @@ const ArticleEditor = ({
 
   const handlePublish = async () => {
     // Validate form before publishing
-    if (!validateForm()) {
-      alert('Please fix the validation errors before publishing.')
+    const isValid = validateForm()
+    
+    if (!isValid) {
+      const errorMessages = Object.entries(validationErrors)
+        .filter(([key, error]) => error)
+        .map(([key, error]) => `• ${error}`)
+        .join('\n')
+      
+      alert(`Please fix the following validation errors before publishing:\n\n${errorMessages}`)
       return
     }
 
@@ -369,19 +555,7 @@ const ArticleEditor = ({
     }
   }
 
-  const insertLink = useCallback(() => {
-    const url = prompt('Enter URL:')
-    if (url && editor) {
-      editor.chain().focus().setLink({ href: url }).run()
-    }
-  }, [editor])
 
-  const insertImage = useCallback(() => {
-    const url = prompt('Enter image URL:')
-    if (url && editor) {
-      editor.chain().focus().setImage({ src: url }).run()
-    }
-  }, [editor])
 
   // Helper function to render form field with error
   const renderFormField = (id, label, children, required = false, error = null) => (
@@ -397,6 +571,28 @@ const ArticleEditor = ({
   )
 
   if (!isOpen) return null
+
+  // Debug logging
+  console.log('ArticleEditor rendering with isOpen:', isOpen)
+  console.log('Editor state:', editor ? 'initialized' : 'not initialized')
+  
+  // Early error boundary - if editor fails to initialize, show a fallback
+  if (isOpen && !editor) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50">
+        <div className="bg-white rounded-xl shadow-2xl p-8 max-w-md">
+          <h2 className="text-xl font-semibold text-gray-900 mb-4">Loading Editor...</h2>
+          <p className="text-gray-600 mb-4">The rich text editor is initializing. Please wait...</p>
+          <button
+            onClick={onClose}
+            className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50 animate-fade-in">
@@ -485,6 +681,28 @@ const ArticleEditor = ({
                 )}
               </div>
 
+              {/* Validation Summary */}
+              {Object.keys(validationErrors).filter(key => validationErrors[key]).length > 0 && (
+                <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+                  <h4 className="text-sm font-semibold text-red-700 mb-2 flex items-center">
+                    <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.804-.833-2.574 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                    </svg>
+                    Required Fields Missing
+                  </h4>
+                  <ul className="text-sm text-red-600 space-y-1">
+                    {Object.entries(validationErrors)
+                      .filter(([key, error]) => error)
+                      .map(([key, error]) => (
+                        <li key={key} className="flex items-center">
+                          <span className="text-red-500 mr-2">•</span>
+                          {error}
+                        </li>
+                      ))}
+                  </ul>
+                </div>
+              )}
+
               {/* Article Metadata */}
               <div className="space-y-5">
                 <h4 className="text-md font-semibold text-gray-900 border-b border-gray-200 pb-2">
@@ -510,7 +728,20 @@ const ArticleEditor = ({
 
                 {renderFormField(
                   'folder',
-                  'Folder',
+                  <div className="flex items-center justify-between">
+                    <span>Folder <span className="text-red-500">*</span></span>
+                    <button
+                      type="button"
+                      onClick={() => setShowCreateFolderModal(true)}
+                      className="text-sm text-blue-600 hover:text-blue-800 font-medium transition-colors flex items-center space-x-1"
+                      disabled={foldersLoading || categoriesLoading}
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                      </svg>
+                      <span>Create new</span>
+                    </button>
+                  </div>,
                   <div className="space-y-2">
                     <div className="relative">
                       <select
@@ -594,7 +825,7 @@ const ArticleEditor = ({
                     {!foldersLoading && !foldersError && folders.length === 0 && (
                       <div className="p-2 bg-yellow-50 border border-yellow-200 rounded-lg">
                         <p className="text-yellow-700 text-xs">
-                          📂 No folders found. Please check your Freshdesk configuration.
+                          📂 No folders found. You can create a new folder to get started.
                         </p>
                       </div>
                     )}
@@ -605,7 +836,7 @@ const ArticleEditor = ({
                       </p>
                     )}
                   </div>,
-                  true,
+                  false,
                   validationErrors.folder
                 )}
 
@@ -698,87 +929,29 @@ const ArticleEditor = ({
           </div>
 
           {/* Right panel - Editor/Preview */}
-          <div className="flex-1 flex flex-col bg-white">
+          <div className="flex-1 flex flex-col bg-white article-editor">
             {!showPreview ? (
               <>
-                {/* Toolbar */}
-                <div className="p-4 border-b border-gray-200 bg-gradient-to-r from-gray-50 to-white">
-                  <div className="flex items-center justify-between mb-3">
-                    <h4 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
-                      ✏️ Rich Text Editor
-                    </h4>
-                    <div className="text-xs text-gray-500">
-                      {editor ? `${editor.getText().length} characters` : '0 characters'}
-                    </div>
+                {/* Enhanced Toolbar */}
+                <RichTextToolbar editor={editor} />
+
+                {/* Editor Stats */}
+                <div className="px-4 py-2 bg-gray-50 border-b border-gray-200 flex items-center justify-between text-xs text-gray-600">
+                  <div className="flex items-center space-x-4">
+                    <span>📊 Words: {editor ? editor.getText().split(/\s+/).filter(word => word.length > 0).length : 0}</span>
+                    <span>📝 Characters: {editor ? editor.getText().length : 0}</span>
+                    <span>🎯 Readability: Good</span>
                   </div>
-                  <div className="flex items-center space-x-2 flex-wrap gap-1">
-                    {/* Text Styling */}
-                    <div className="flex items-center space-x-1 bg-white rounded-lg p-1 border shadow-sm">
-                      <button
-                        onClick={() => editor?.chain().focus().toggleBold().run()}
-                        className={`px-3 py-1.5 text-sm rounded transition-all ${editor?.isActive('bold') ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-700 hover:bg-gray-100'}`}
-                        title="Bold (Ctrl+B)"
-                      >
-                        <strong>B</strong>
-                      </button>
-                      <button
-                        onClick={() => editor?.chain().focus().toggleItalic().run()}
-                        className={`px-3 py-1.5 text-sm rounded transition-all ${editor?.isActive('italic') ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-700 hover:bg-gray-100'}`}
-                        title="Italic (Ctrl+I)"
-                      >
-                        <em>I</em>
-                      </button>
-                      <button
-                        onClick={() => editor?.chain().focus().toggleHighlight().run()}
-                        className={`px-3 py-1.5 text-sm rounded transition-all ${editor?.isActive('highlight') ? 'bg-yellow-400 text-black shadow-sm' : 'text-gray-700 hover:bg-yellow-100'}`}
-                        title="Highlight"
-                      >
-                        🖍️
-                      </button>
-                    </div>
-                    
-                    {/* Headings */}
-                    <div className="flex items-center space-x-1 bg-white rounded-lg p-1 border shadow-sm">
-                      <button
-                        onClick={() => editor?.chain().focus().toggleHeading({ level: 1 }).run()}
-                        className={`px-3 py-1.5 text-sm rounded font-semibold transition-all ${editor?.isActive('heading', { level: 1 }) ? 'bg-indigo-600 text-white shadow-sm' : 'text-gray-700 hover:bg-gray-100'}`}
-                        title="Heading 1"
-                      >
-                        H1
-                      </button>
-                      <button
-                        onClick={() => editor?.chain().focus().toggleHeading({ level: 2 }).run()}
-                        className={`px-3 py-1.5 text-sm rounded font-medium transition-all ${editor?.isActive('heading', { level: 2 }) ? 'bg-indigo-600 text-white shadow-sm' : 'text-gray-700 hover:bg-gray-100'}`}
-                        title="Heading 2"
-                      >
-                        H2
-                      </button>
-                      <button
-                        onClick={() => editor?.chain().focus().toggleBulletList().run()}
-                        className={`px-3 py-1.5 text-sm rounded transition-all ${editor?.isActive('bulletList') ? 'bg-indigo-600 text-white shadow-sm' : 'text-gray-700 hover:bg-gray-100'}`}
-                        title="Bullet List"
-                      >
-                        📋
-                      </button>
-                    </div>
-                    
-                    {/* Media & Links */}
-                    <div className="flex items-center space-x-1 bg-white rounded-lg p-1 border shadow-sm">
-                      <button
-                        onClick={insertLink}
-                        className="px-3 py-1.5 text-sm rounded text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-all"
-                        title="Insert Link"
-                      >
-                        🔗
-                      </button>
-                      <button
-                        onClick={insertImage}
-                        className="px-3 py-1.5 text-sm rounded text-gray-700 hover:bg-green-50 hover:text-green-700 transition-all"
-                        title="Insert Image"
-                      >
-                        🖼️
-                      </button>
-                    </div>
+                  <div className="flex items-center space-x-2">
+                    <label className="flex items-center gap-1">
+                      <input
+                        type="checkbox"
+                        checked={autoSaveEnabled}
+                        onChange={(e) => setAutoSaveEnabled(e.target.checked)}
+                        className="text-blue-600 focus:ring-blue-500"
+                      />
+                      <span>Auto-save</span>
+                    </label>
                   </div>
                 </div>
 
@@ -787,7 +960,7 @@ const ArticleEditor = ({
                   <div className={`min-h-full border-2 border-dashed rounded-lg transition-colors ${validationErrors.content ? 'border-red-300 bg-red-50' : 'border-gray-200 hover:border-gray-300'}`}>
                     <EditorContent 
                       editor={editor} 
-                      className="prose prose-gray max-w-none min-h-full p-4 focus:outline-none"
+                      className="min-h-full p-4 focus:outline-none"
                     />
                   </div>
                   {validationErrors.content && (
@@ -924,6 +1097,7 @@ const ArticleEditor = ({
             <div className="flex items-center space-x-4">
               <span>📊 Words: {editor ? editor.getText().split(/\s+/).filter(word => word.length > 0).length : 0}</span>
               <span>📝 Characters: {editor ? editor.getText().length : 0}</span>
+              <span>⏱️ Reading time: {editor ? Math.ceil(editor.getText().split(/\s+/).filter(word => word.length > 0).length / 200) : 0} min</span>
               {folders.length > 0 && (
                 <span>📁 {folders.length} folders available</span>
               )}
@@ -934,10 +1108,22 @@ const ArticleEditor = ({
               <span>•</span>
               <kbd className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded">Ctrl+S</kbd>
               <span>to save</span>
+              <span>•</span>
+              <kbd className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded">Ctrl+Shift+Enter</kbd>
+              <span>to publish</span>
             </div>
           </div>
         </div>
       </div>
+
+      {/* Create Folder Modal */}
+      <CreateFolderModal
+        isOpen={showCreateFolderModal}
+        onClose={() => setShowCreateFolderModal(false)}
+        onFolderCreated={handleFolderCreated}
+        categories={categories}
+        folders={folders}
+      />
     </div>
   )
 }

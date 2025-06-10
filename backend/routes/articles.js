@@ -644,6 +644,161 @@ router.post('/create', requireAuth, async (req, res) => {
 })
 
 /**
+ * POST /articles/folders/create
+ * Create a new folder in Freshdesk (protected route)
+ */
+router.post('/folders/create', requireAuth, async (req, res) => {
+  try {
+    console.log(`[CREATE FOLDER] User ${req.user.email} creating folder: "${req.body.name}"`)
+    console.log(`[CREATE FOLDER] Request body:`, req.body)
+
+    const { name, description, category_id, parent_folder_id, visibility } = req.body
+
+    // Validate required fields
+    if (!name || !name.trim()) {
+      return res.status(400).json({
+        error: 'Folder name is required',
+        code: 'MISSING_FOLDER_NAME'
+      })
+    }
+
+    // Log the exact data being sent to MCP
+    const folderData = {
+      name: name.trim(),
+      description: description?.trim() || undefined,
+      category_id: category_id ? parseInt(category_id) : undefined,
+      parent_folder_id: parent_folder_id ? parseInt(parent_folder_id) : undefined,
+      visibility: parseInt(visibility) || 2
+    }
+
+    console.log(`[CREATE FOLDER] Category ID: ${folderData.category_id}, Visibility: ${folderData.visibility}`)
+    console.log(`[CREATE FOLDER] Processed folder data:`, folderData)
+
+    // Before creating folder, let's check what categories are available
+    try {
+      const categoriesResult = await mcpClient.listCategories()
+      console.log(`[CREATE FOLDER] Available categories: ${categoriesResult.count}`)
+      if (categoriesResult.categories && categoriesResult.categories.length > 0) {
+        console.log(`[CREATE FOLDER] Category IDs:`, categoriesResult.categories.map(c => c.id))
+        
+        // Check if the requested category exists
+        if (folderData.category_id) {
+          const categoryExists = categoriesResult.categories.find(c => c.id === folderData.category_id)
+          if (!categoryExists) {
+            console.warn(`[CREATE FOLDER] Category ${folderData.category_id} not found in available categories`)
+          } else {
+            console.log(`[CREATE FOLDER] Category ${folderData.category_id} found: ${categoryExists.name}`)
+          }
+        }
+      }
+    } catch (categoryError) {
+      console.warn(`[CREATE FOLDER] Could not check categories:`, categoryError.message)
+    }
+
+    let result
+    let fallbackUsed = false
+
+    try {
+      // First attempt: try with the provided data
+      result = await mcpClient.createFolder(folderData)
+      console.log(`[CREATE FOLDER] Creation result:`, result.success ? 'Success' : 'Failed')
+    } catch (error) {
+      console.log(`[CREATE FOLDER] First attempt failed:`, error.message)
+      
+      // If the error is about category not found and we have a category_id, try without it
+      if ((error.message.includes('Not Found') || error.message.includes('404')) && folderData.category_id) {
+        console.log(`[CREATE FOLDER] Attempting fallback: creating folder without category_id`)
+        
+        const fallbackData = { ...folderData }
+        delete fallbackData.category_id
+        
+        try {
+          result = await mcpClient.createFolder(fallbackData)
+          fallbackUsed = true
+          console.log(`[CREATE FOLDER] Fallback creation result:`, result.success ? 'Success' : 'Failed')
+        } catch (fallbackError) {
+          console.error(`[CREATE FOLDER] Fallback also failed:`, fallbackError.message)
+          throw fallbackError
+        }
+      } else {
+        // Re-throw the original error if it's not a category issue
+        throw error
+      }
+    }
+
+    // Prepare response
+    const response = {
+      success: true,
+      folder: result.folder,
+      message: result.message || 'Folder created successfully',
+      user: {
+        id: req.user.id,
+        email: req.user.email
+      },
+      timestamp: new Date().toISOString()
+    }
+
+    // Add fallback notice if used
+    if (fallbackUsed) {
+      response.notice = 'Folder was created at root level because the specified category was not found'
+      response.fallback_used = true
+    }
+
+    res.status(201).json(response)
+
+  } catch (error) {
+    // Enhanced error logging
+    const errorDetails = {
+      error: error.message,
+      user: req.user?.email,
+      folderName: req.body?.name,
+      categoryId: req.body?.category_id,
+      parentFolderId: req.body?.parent_folder_id,
+      visibility: req.body?.visibility,
+      stack: error.stack,
+      timestamp: new Date().toISOString()
+    }
+
+    console.error('Folder creation error:', errorDetails)
+
+    // Determine error type and provide appropriate response
+    let statusCode = 500
+    let errorCode = 'FOLDER_CREATION_FAILED'
+    let userMessage = 'An unexpected error occurred while creating the folder'
+
+    if (error.message.includes('Not Found') || error.message.includes('404')) {
+      statusCode = 404
+      errorCode = 'FRESHDESK_NOT_FOUND'
+      userMessage = 'The specified category or parent folder doesn\'t exist'
+    } else if (error.message.includes('Authentication') || error.message.includes('401')) {
+      statusCode = 401
+      errorCode = 'FRESHDESK_AUTH_ERROR'
+      userMessage = 'Authentication failed with Freshdesk'
+    } else if (error.message.includes('Forbidden') || error.message.includes('403')) {
+      statusCode = 403
+      errorCode = 'FRESHDESK_PERMISSION_ERROR'
+      userMessage = 'Permission denied for folder creation'
+    } else if (error.message.includes('Bad Request') || error.message.includes('400')) {
+      statusCode = 400
+      errorCode = 'FRESHDESK_BAD_REQUEST'
+      userMessage = 'Invalid folder data provided'
+    } else if (error.message.includes('Validation') || error.message.includes('422')) {
+      statusCode = 422
+      errorCode = 'FRESHDESK_VALIDATION_ERROR'
+      userMessage = 'Folder data failed validation'
+    }
+
+    res.status(statusCode).json({
+      error: userMessage,
+      message: error.message,
+      code: errorCode,
+      details: process.env.NODE_ENV === 'development' ? errorDetails : undefined,
+      timestamp: new Date().toISOString()
+    })
+  }
+})
+
+/**
  * GET /articles/:id
  * Get a specific article by ID (protected route)
  * NOTE: This route MUST be last to avoid catching other specific routes like /categories
@@ -731,6 +886,40 @@ router.get('/:id', requireAuth, async (req, res) => {
       error: 'Article fetch failed',
       message: 'An unexpected error occurred while fetching the article',
       code: 'ARTICLE_FETCH_ERROR'
+    })
+  }
+})
+
+/**
+ * GET /articles/debug/categories
+ * Debug endpoint to see raw MCP categories response
+ */
+router.get('/debug/categories', requireAuth, async (req, res) => {
+  try {
+    console.log(`[DEBUG] User ${req.user.email} requesting raw categories data`)
+
+    // Get raw MCP responses
+    const rawCategoriesResult = await mcpClient.callFunction('list_categories', {})
+    const rawFoldersResult = await mcpClient.callFunction('list_all_folders', {})
+    
+    console.log('[DEBUG] Raw categories result:', JSON.stringify(rawCategoriesResult, null, 2))
+    console.log('[DEBUG] Raw folders result type:', typeof rawFoldersResult)
+
+    res.status(200).json({
+      success: true,
+      debug: {
+        raw_categories: rawCategoriesResult,
+        raw_folders_type: typeof rawFoldersResult,
+        raw_folders: rawFoldersResult,
+        timestamp: new Date().toISOString()
+      }
+    })
+
+  } catch (error) {
+    console.error('Debug categories error:', error)
+    res.status(500).json({
+      error: 'Debug failed',
+      message: error.message
     })
   }
 })

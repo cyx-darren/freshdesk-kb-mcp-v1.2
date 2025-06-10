@@ -1099,22 +1099,22 @@ server.tool(
       }
 
       // Construct the request body according to Freshdesk API v2 format
+      // Note: folder_id is NOT included in the body since it's part of the URL path
       const requestBody = {
         title: title,
         description: description,
-        folder_id: folder_id,
         tags: tags,
         status: status
       };
 
-      // Add SEO data if provided
+      // Add SEO data if provided - must be in seo_data object per Freshdesk API docs
       if (seo_title || meta_description) {
-        requestBody.seo = {};
+        requestBody.seo_data = {};
         if (seo_title) {
-          requestBody.seo.title = seo_title;
+          requestBody.seo_data.meta_title = seo_title;
         }
         if (meta_description) {
-          requestBody.seo.meta_description = meta_description;
+          requestBody.seo_data.meta_description = meta_description;
         }
       }
 
@@ -1122,9 +1122,12 @@ server.tool(
       console.error('📝 Title:', title);
       console.error('📁 Folder ID:', folder_id);
       console.error('📊 Status:', status === 1 ? 'Draft' : 'Published');
+      console.error('🔍 DEBUGGING - Exact request body being sent:');
+      console.error('   Keys:', Object.keys(requestBody));
+      console.error('   Full body:', JSON.stringify(requestBody, null, 2));
 
-      // Construct the Freshdesk API URL for creating articles
-      const apiUrl = `https://${FRESHDESK_DOMAIN}/api/v2/solutions/articles`;
+      // Construct the Freshdesk API URL for creating articles in the specified folder
+      const apiUrl = `https://${FRESHDESK_DOMAIN}/api/v2/solutions/folders/${folder_id}/articles`;
       
       // Make the API call with proper authentication
       const response = await axios.post(apiUrl, requestBody, {
@@ -1140,14 +1143,22 @@ server.tool(
 
       const createdArticle = response.data;
 
+      console.error('📥 Freshdesk API Response:');
+      console.error('   Status:', response.status);
+      console.error('   Headers:', response.headers);
+      console.error('   Data:', JSON.stringify(createdArticle, null, 2));
+
       // Check if we got a valid response
       if (!createdArticle || !createdArticle.id) {
+        console.error('❌ Invalid response: missing article ID');
         return {
           isError: true,
           content: [
             {
               type: 'text',
-              text: '🚨 **Article Creation Failed**: No valid response received from Freshdesk API.'
+              text: '🚨 **Article Creation Failed**: No valid response received from Freshdesk API.\n\n' +
+                    `📄 **Response Status**: ${response.status}\n` +
+                    `📊 **Response Data**: ${JSON.stringify(createdArticle, null, 2)}`
             }
           ]
         };
@@ -1166,12 +1177,12 @@ server.tool(
         successMessage += `🏷️ **Tags**: ${createdArticle.tags.join(', ')}\n`;
       }
       
-      if (createdArticle.seo) {
-        if (createdArticle.seo.title) {
-          successMessage += `🔍 **SEO Title**: ${createdArticle.seo.title}\n`;
+      if (createdArticle.seo_data) {
+        if (createdArticle.seo_data.meta_title) {
+          successMessage += `🔍 **SEO Title**: ${createdArticle.seo_data.meta_title}\n`;
         }
-        if (createdArticle.seo.meta_description) {
-          successMessage += `📄 **Meta Description**: ${createdArticle.seo.meta_description}\n`;
+        if (createdArticle.seo_data.meta_description) {
+          successMessage += `📄 **Meta Description**: ${createdArticle.seo_data.meta_description}\n`;
         }
       }
       
@@ -1254,13 +1265,14 @@ server.tool(
             suggestions.push('Verify you have access to the specified folder');
             break;
           case 404:
-            errorMessage += '🔍 **Not Found**: The specified folder or endpoint doesn\'t exist.';
+            errorMessage += '🔍 **Not Found**: The specified folder doesn\'t exist or is inaccessible.';
             suggestions.push('Verify the folder_id exists and is correct');
             suggestions.push('Check if the folder is in an accessible category');
-            suggestions.push('Use list_categories to find valid folder IDs');
+            suggestions.push('Use list_categories and list_folders to find valid folder IDs');
+            suggestions.push('Ensure you have write access to this specific folder');
             break;
           case 422:
-            errorMessage += '📝 **Validation Error**: The article data failed validation.';
+            errorMessage += '🚨 **Validation Error**: The article data failed validation.';
             suggestions.push('Check that all required fields are provided');
             suggestions.push('Ensure folder_id points to an existing folder');
             suggestions.push('Verify title and description are not empty');
@@ -1345,7 +1357,337 @@ server.tool(
       if (seo_title) errorMessage += `\n• SEO Title: "${seo_title}"`;
       if (meta_description) errorMessage += `\n• Meta Description: "${meta_description}"`;
       errorMessage += `\n📅 **Time**: ${new Date().toISOString()}`;
-      errorMessage += `\n🔗 **Attempted URL**: https://${FRESHDESK_DOMAIN}/api/v2/solutions/articles`;
+      errorMessage += `\n🔗 **Attempted URL**: https://${FRESHDESK_DOMAIN}/api/v2/solutions/folders/${folder_id}/articles`;
+
+      return {
+        isError: true,
+        content: [
+          {
+            type: 'text',
+            text: errorMessage
+          }
+        ]
+      };
+    }
+  }
+);
+
+// Add a tool to create a new folder in Freshdesk knowledge base
+server.tool(
+  'create_folder',
+  'Create a new folder in Freshdesk knowledge base. Category ID is optional - if not provided, creates a root-level folder.',
+  {
+    name: z.string().describe('Name of the folder (required)'),
+    description: z.string().optional().describe('Description of the folder (optional)'),
+    category_id: z.number().optional().describe('Category ID where the folder should be created (optional - omit for root-level folder)'),
+    parent_folder_id: z.number().optional().describe('Parent folder ID to nest under existing folder (optional)'),
+    visibility: z.number().optional().default(2).describe('Visibility: 1 for private, 2 for public (default: 2)')
+  },
+  async ({ name, description, category_id, parent_folder_id, visibility = 2 }) => {
+    try {
+      // Validate required fields
+      if (!name || !name.trim()) {
+        return {
+          isError: true,
+          content: [
+            {
+              type: 'text',
+              text: '❌ **Folder name is required**\n\nPlease provide a valid folder name.'
+            }
+          ]
+        };
+      }
+
+      // Validate visibility (expanded options)
+      if (![1, 2, 3, 4].includes(visibility)) {
+        return {
+          isError: true,
+          content: [
+            {
+              type: 'text',
+              text: '❌ **Invalid Visibility**: Visibility must be 1 (private), 2 (public), 3 (logged-in users), or 4 (selected companies).'
+            }
+          ]
+        };
+      }
+
+      // Construct the request body according to Freshdesk API v2 format
+      const requestBody = {
+        name: name.trim(),
+        visibility: visibility
+      };
+
+      // Add optional fields if provided
+      if (description && description.trim()) {
+        requestBody.description = description.trim();
+      }
+
+      if (category_id) {
+        requestBody.category_id = category_id;
+      }
+
+      if (parent_folder_id) {
+        requestBody.parent_folder_id = parent_folder_id;
+      }
+
+      console.error('🔨 Creating folder in Freshdesk...');
+      console.error('📝 Name:', name);
+      if (category_id) {
+        console.error('📂 Category ID:', category_id);
+      } else {
+        console.error('📂 Root-level folder (no category)');
+      }
+      console.error('👁️ Visibility:', visibility === 1 ? 'Private' : visibility === 2 ? 'Public' : visibility === 3 ? 'Logged-in users' : 'Selected companies');
+      if (parent_folder_id) {
+        console.error('📁 Parent Folder ID:', parent_folder_id);
+      }
+
+      // Construct the Freshdesk API URL for creating folders
+      // Build the correct API URL - folders must be created within a category
+      if (!category_id) {
+        throw new Error('Category ID is required for folder creation. Folders must be created within a specific category according to Freshdesk API documentation.');
+      }
+      
+      const apiUrl = `https://${FRESHDESK_DOMAIN}/api/v2/solutions/categories/${category_id}/folders`;
+      
+      // Make the API call with proper authentication
+      let response;
+      try {
+        response = await axios.post(apiUrl, requestBody, {
+          auth: {
+            username: FRESHDESK_API_KEY,
+            password: 'X'
+          },
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          timeout: 15000 // 15 second timeout for creation
+        });
+      } catch (primaryError) {
+        // If we get a 404 error and we tried with a category_id, try again without it
+        if (primaryError.response?.status === 404 && category_id) {
+          console.error('⚠️ First attempt failed with 404, trying without category_id...');
+          
+          const fallbackRequestBody = {
+            name: name.trim(),
+            visibility: visibility
+          };
+
+          if (description && description.trim()) {
+            fallbackRequestBody.description = description.trim();
+          }
+
+          if (parent_folder_id) {
+            fallbackRequestBody.parent_folder_id = parent_folder_id;
+          }
+
+          try {
+            response = await axios.post(apiUrl, fallbackRequestBody, {
+              auth: {
+                username: FRESHDESK_API_KEY,
+                password: 'X'
+              },
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              timeout: 15000
+            });
+            
+            console.error('✅ Fallback succeeded - folder created without category_id');
+          } catch (fallbackError) {
+            // Both attempts failed, throw the original error
+            throw primaryError;
+          }
+        } else {
+          // Not a 404 or no category_id to retry without, throw the original error
+          throw primaryError;
+        }
+      }
+
+      const createdFolder = response.data;
+
+      // Check if we got a valid response
+      if (!createdFolder || !createdFolder.id) {
+        return {
+          isError: true,
+          content: [
+            {
+              type: 'text',
+              text: '🚨 **Folder Creation Failed**: No valid response received from Freshdesk API.'
+            }
+          ]
+        };
+      }
+
+      console.error(`✅ Folder created successfully with ID: ${createdFolder.id}`);
+
+      // Format the success response
+      let successMessage = `✅ **Folder Created Successfully!**\n\n`;
+      successMessage += `📁 **Folder Details:**\n`;
+      successMessage += `• **Name**: ${createdFolder.name}\n`;
+      successMessage += `• **ID**: ${createdFolder.id} ⭐ *Use this ID for article creation*\n`;
+      
+      if (createdFolder.category_id || category_id) {
+        successMessage += `• **Category ID**: ${createdFolder.category_id || category_id}\n`;
+      } else {
+        successMessage += `• **Location**: Root level (no category)\n`;
+      }
+      
+      successMessage += `• **Visibility**: ${createdFolder.visibility === 1 ? 'Private' : createdFolder.visibility === 2 ? 'Public' : createdFolder.visibility === 3 ? 'Logged-in users' : 'Selected companies'}\n`;
+      
+      if (createdFolder.description) {
+        successMessage += `• **Description**: ${createdFolder.description}\n`;
+      }
+
+      if (createdFolder.parent_folder_id) {
+        successMessage += `• **Parent Folder ID**: ${createdFolder.parent_folder_id}\n`;
+      }
+
+      if (createdFolder.created_at) {
+        const createdDate = new Date(createdFolder.created_at).toLocaleString();
+        successMessage += `• **Created**: ${createdDate}\n`;
+      }
+
+      successMessage += `\n💡 **Next Steps:**\n`;
+      successMessage += `• Use folder ID ${createdFolder.id} when creating articles\n`;
+      successMessage += `• The folder is now available in the knowledge base\n`;
+      if (category_id) {
+        successMessage += `• You can nest child folders under this folder using parent_folder_id`;
+      } else {
+        successMessage += `• This is a root-level folder - you can organize it into categories later in Freshdesk`;
+      }
+
+      return {
+        success: true,
+        folder: {
+          id: createdFolder.id,
+          name: createdFolder.name,
+          description: createdFolder.description || null,
+          category_id: createdFolder.category_id || category_id,
+          parent_folder_id: createdFolder.parent_folder_id || null,
+          visibility: createdFolder.visibility || visibility,
+          created_at: createdFolder.created_at || null,
+          updated_at: createdFolder.updated_at || null
+        },
+        content: [
+          {
+            type: 'text',
+            text: successMessage
+          }
+        ]
+      };
+
+    } catch (error) {
+      // Enhanced error logging with context
+      console.error('=== Freshdesk Create Folder API Error ===');
+      console.error('Name:', name);
+      console.error('Category ID:', category_id);
+      console.error('Domain:', FRESHDESK_DOMAIN);
+      console.error('Error Type:', error.constructor.name);
+      console.error('Error Message:', error.message);
+      
+      if (error.response) {
+        console.error('Response Status:', error.response.status);
+        console.error('Response Headers:', error.response.headers);
+        console.error('Response Data:', error.response.data);
+      } else if (error.request) {
+        console.error('Request Config:', {
+          url: error.config?.url,
+          method: error.config?.method,
+          timeout: error.config?.timeout
+        });
+      }
+      console.error('Stack Trace:', error.stack);
+      console.error('=====================================');
+      
+      let errorMessage = `🚨 **Failed to create folder "${name}"**\n\n`;
+      let suggestions = [];
+      
+      if (error.response) {
+        // API responded with error status
+        const status = error.response.status;
+        const statusText = error.response.statusText;
+        const responseData = error.response.data;
+        
+        switch (status) {
+          case 400:
+            errorMessage += '❌ **Bad Request**: The folder data format is invalid.';
+            suggestions.push('Check that category_id is a valid number');
+            suggestions.push('Ensure folder name is not empty');
+            suggestions.push('Verify that visibility is 1 (private) or 2 (public)');
+            suggestions.push('Check if parent_folder_id exists if provided');
+            if (responseData && responseData.errors) {
+              suggestions.push(`API Error Details: ${JSON.stringify(responseData.errors)}`);
+            }
+            break;
+          case 401:
+            errorMessage += '🔐 **Authentication Failed**: Your API key is invalid or expired.';
+            suggestions.push('Verify your FRESHDESK_API_KEY in the .env file');
+            suggestions.push('Check if your API key is active in Freshdesk settings');
+            suggestions.push('Ensure you\'re using the correct API key format');
+            break;
+          case 403:
+            errorMessage += '🚫 **Access Forbidden**: Your API key lacks the required permissions.';
+            suggestions.push('Contact your Freshdesk administrator');
+            suggestions.push('Ensure your API key has "Knowledge Base" write permissions');
+            suggestions.push('Check if your account has permission to create folders');
+            suggestions.push('Verify you have access to the specified category');
+            break;
+          case 404:
+            errorMessage += '🔍 **Not Found**: The Solutions API endpoint may not be available with your API key.';
+            suggestions.push('**CRITICAL**: Your API key may not have Knowledge Base permissions');
+            suggestions.push('Check if Knowledge Base is enabled in your Freshdesk account');
+            suggestions.push('Verify your API key has the "Knowledge Base" scope');
+            suggestions.push('Contact your Freshdesk administrator to enable Knowledge Base API access');
+            suggestions.push('Try creating folders through the Freshdesk web interface first');
+            break;
+          case 422:
+            errorMessage += '🚨 **Validation Error**: The folder data failed validation.';
+            suggestions.push('Check for duplicate folder names in the same category');
+            suggestions.push('Ensure folder name meets Freshdesk requirements');
+            suggestions.push('Verify all required fields are provided');
+            if (responseData && responseData.errors) {
+              suggestions.push(`Validation Details: ${JSON.stringify(responseData.errors)}`);
+            }
+            break;
+          case 429:
+            errorMessage += '⏰ **Rate Limit Exceeded**: Too many requests sent too quickly.';
+            suggestions.push('Wait 60 seconds before trying again');
+            suggestions.push('Reduce the frequency of API calls');
+            break;
+          default:
+            errorMessage += `💥 **API Error**: ${status} ${statusText}`;
+            if (responseData) {
+              suggestions.push(`Response: ${JSON.stringify(responseData)}`);
+            }
+        }
+      } else if (error.request) {
+        // Network or connection error
+        errorMessage += '🌐 **Network Error**: Unable to reach Freshdesk servers.';
+        suggestions.push('Check your internet connection');
+        suggestions.push('Verify your FRESHDESK_DOMAIN is correct');
+        suggestions.push('Ensure Freshdesk servers are accessible');
+      } else {
+        // Configuration or other errors
+        errorMessage += `⚙️ **Configuration Error**: ${error.message}`;
+        suggestions.push('Check your environment variables');
+        suggestions.push('Ensure all dependencies are installed');
+        suggestions.push('Verify your .env file configuration');
+      }
+      
+      // Add suggestions to the error message
+      if (suggestions.length > 0) {
+        errorMessage += '\n\n💡 **Suggestions**:\n' + suggestions.map(s => `• ${s}`).join('\n');
+      }
+      
+      // Add context for debugging
+      errorMessage += `\n\n📝 **Folder Details**:`;
+      errorMessage += `\n• Name: "${name}"`;
+      errorMessage += `\n• Category ID: ${category_id || 'None (root-level)'}\n`;
+      errorMessage += `• Parent Folder ID: ${parent_folder_id || 'None'}\n`;
+      errorMessage += `• Visibility: ${visibility} (${visibility === 1 ? 'Private' : 'Public'})\n`;
+      errorMessage += `📅 **Time**: ${new Date().toISOString()}\n`;
+      errorMessage += `🔗 **Attempted URL**: https://${FRESHDESK_DOMAIN}/api/v2/solutions/categories/${category_id}/folders`;
 
       return {
         isError: true,

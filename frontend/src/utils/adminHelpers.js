@@ -22,7 +22,7 @@ export const useAdminHelpers = () => {
       // For development/testing - you can add your email here
       'test@example.com',
       'admin@test.com',
-      // Add your actual email here (replace with your real email)
+      'nica@easyprintsg.com',// Add your actual email here (replace with your real email)
       'darren@easyprintsg.com'  // Replace this with your actual email
     ]
     
