@@ -191,7 +191,12 @@ app.get('/api', (req, res) => {
         clearHistory: 'DELETE /api/analytics/history (protected)'
       },
       chat: {
-        chat: 'POST /api/chat/chat (protected)',
+        chat: 'POST /api/chat (protected)',
+        sessions: 'GET /api/chat/sessions (protected)',
+        createSession: 'POST /api/chat/sessions (protected)',
+        updateSession: 'PUT /api/chat/sessions/:id (protected)',
+        deleteSession: 'DELETE /api/chat/sessions/:id (protected)',
+        sessionMessages: 'GET /api/chat/sessions/:id/messages (protected)',
         history: 'GET /api/chat/history (protected)',
         clearHistory: 'DELETE /api/chat/history (protected)'
       }
@@ -228,7 +233,12 @@ app.use('*', (req, res) => {
         'GET /api/analytics/history',
         'GET /api/analytics/insights',
         'GET /api/analytics/popular',
-        'POST /api/chat/chat',
+        'POST /api/chat',
+        'GET /api/chat/sessions',
+        'POST /api/chat/sessions',
+        'PUT /api/chat/sessions/:id',
+        'DELETE /api/chat/sessions/:id',
+        'GET /api/chat/sessions/:id/messages',
         'GET /api/chat/history',
         'DELETE /api/chat/history'
       ]
@@ -299,9 +309,14 @@ app.listen(PORT, async () => {
   console.log(`   • GET  /api/articles/search - Search knowledge base (protected)`)
   console.log(`   • GET  /api/articles/:id    - Get specific article (protected)`)
   console.log(`   • GET  /api/articles/categories - List categories (protected)`)
-  console.log(`   • POST /api/chat/chat       - Chat with AI assistant (protected)`)
-  console.log(`   • GET  /api/chat/history    - Get chat history (protected)`)
-  console.log(`   • DELETE /api/chat/history  - Clear chat history (protected)`)
+  console.log(`   • POST /api/chat              - Chat with AI assistant (protected)`)
+  console.log(`   • GET  /api/chat/sessions     - Get chat sessions (protected)`)
+  console.log(`   • POST /api/chat/sessions     - Create chat session (protected)`)
+  console.log(`   • PUT  /api/chat/sessions/:id - Update chat session (protected)`)
+  console.log(`   • DEL  /api/chat/sessions/:id - Delete chat session (protected)`)
+  console.log(`   • GET  /api/chat/sessions/:id/messages - Get session messages (protected)`)
+  console.log(`   • GET  /api/chat/history      - Get chat history (protected)`)
+  console.log(`   • DELETE /api/chat/history    - Clear chat history (protected)`)
   console.log('\n💡 Ready to accept requests!')
   
   if (NODE_ENV === 'development') {

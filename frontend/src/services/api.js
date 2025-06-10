@@ -194,15 +194,30 @@ export const authService = {
 
 // Chat service functions
 export const chatService = {
-  async sendMessage(message, context = 'knowledge_base') {
+  async sendMessage(message, sessionId = null, context = 'knowledge_base') {
+    console.log('🌐 [chatService] Sending message:', {
+      message: message.substring(0, 50) + '...',
+      sessionId,
+      context
+    })
+    
     try {
       const response = await api.post('/api/chat', {
         message,
+        sessionId,
         context
       })
+      
+      console.log('✅ [chatService] Response received:', {
+        success: response.data.success,
+        sessionId: response.data.sessionId,
+        hasMessage: !!response.data.message,
+        articlesCount: response.data.articles?.length || 0
+      })
+      
       return response.data
     } catch (error) {
-      console.error('Chat service error:', error)
+      console.error('❌ [chatService] Error:', error)
       throw error
     }
   },
@@ -223,6 +238,66 @@ export const chatService = {
       return response.data
     } catch (error) {
       console.error('Clear chat history error:', error)
+      throw error
+    }
+  },
+
+  // New session-based endpoints
+  async getChatSessions(limit = 50, offset = 0) {
+    console.log('📂 [chatService] Getting chat sessions:', { limit, offset })
+    
+    try {
+      const response = await api.get(`/api/chat/sessions?limit=${limit}&offset=${offset}`)
+      
+      console.log('✅ [chatService] Sessions response:', {
+        success: response.data.success,
+        sessionsCount: response.data.sessions?.length || 0,
+        sessions: response.data.sessions
+      })
+      
+      return response.data
+    } catch (error) {
+      console.error('❌ [chatService] Get chat sessions error:', error)
+      throw error
+    }
+  },
+
+  async getSessionMessages(sessionId) {
+    try {
+      const response = await api.get(`/api/chat/sessions/${sessionId}/messages`)
+      return response.data
+    } catch (error) {
+      console.error('Get session messages error:', error)
+      throw error
+    }
+  },
+
+  async createChatSession(title = null) {
+    try {
+      const response = await api.post('/api/chat/sessions', { title })
+      return response.data
+    } catch (error) {
+      console.error('Create chat session error:', error)
+      throw error
+    }
+  },
+
+  async updateChatSession(sessionId, updates) {
+    try {
+      const response = await api.put(`/api/chat/sessions/${sessionId}`, updates)
+      return response.data
+    } catch (error) {
+      console.error('Update chat session error:', error)
+      throw error
+    }
+  },
+
+  async deleteChatSession(sessionId) {
+    try {
+      const response = await api.delete(`/api/chat/sessions/${sessionId}`)
+      return response.data
+    } catch (error) {
+      console.error('Delete chat session error:', error)
       throw error
     }
   },
