@@ -13,6 +13,7 @@
     "@supabase/supabase-js": "^2.38.0",
     "@tailwindcss/forms": "^0.5.7",
     "@tiptap/extension-blockquote": "^2.14.0",
+    "@tiptap/extension-character-count": "^2.14.0",
     "@tiptap/extension-code": "^2.14.0",
     "@tiptap/extension-code-block": "^2.14.0",
     "@tiptap/extension-color": "^2.14.0",
@@ -23,6 +24,7 @@
     "@tiptap/extension-link": "^2.14.0",
     "@tiptap/extension-list-item": "^2.14.0",
     "@tiptap/extension-ordered-list": "^2.14.0",
+    "@tiptap/extension-placeholder": "^2.14.0",
     "@tiptap/extension-strike": "^2.14.0",
     "@tiptap/extension-subscript": "^2.14.0",
     "@tiptap/extension-superscript": "^2.14.0",
@@ -39,10 +41,14 @@
     "@tiptap/react": "^2.14.0",
     "@tiptap/starter-kit": "^2.14.0",
     "axios": "^1.9.0",
+    "framer-motion": "^12.17.0",
+    "lucide-react": "^0.514.0",
     "react": "^18.2.0",
     "react-color": "^2.19.3",
     "react-dom": "^18.2.0",
-    "react-router-dom": "^6.20.0"
+    "react-modal": "^3.16.3",
+    "react-router-dom": "^6.20.0",
+    "recharts": "^2.15.3"
   },
   "devDependencies": {
     "@types/react": "^18.2.43",

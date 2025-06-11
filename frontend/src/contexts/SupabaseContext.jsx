@@ -243,4 +243,7 @@ export const SupabaseProvider = ({ children }) => {
 }
 
 // Default export
-export default SupabaseProvider 
+export default SupabaseProvider
+
+// Export supabase client for direct use in services
+export { supabase } 

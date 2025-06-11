@@ -7,6 +7,8 @@ import authRoutes from './routes/auth.js'
 import articleRoutes from './routes/articles.js'
 import analyticsRoutes from './routes/analytics.js'
 import chatRoutes from './routes/chat.js'
+import bugRoutes from './routes/bugs.js'
+import featureRoutes from './routes/features.js'
 
 // Import middleware
 import { requireAuth, optionalAuth } from './middleware/auth.js'
@@ -92,6 +94,9 @@ app.use(express.json({ limit: '10mb' }))
 // Parse URL-encoded bodies
 app.use(express.urlencoded({ extended: true, limit: '10mb' }))
 
+// Serve static uploads
+app.use('/uploads', express.static('uploads'))
+
 // Add request logging middleware
 app.use((req, res, next) => {
   const timestamp = new Date().toISOString()
@@ -159,6 +164,8 @@ app.use('/api/auth', authRoutes)
 app.use('/api/articles', articleRoutes)
 app.use('/api/analytics', analyticsRoutes)
 app.use('/api/chat', chatRoutes)
+app.use('/api/bugs', bugRoutes)
+app.use('/api/features', featureRoutes)
 
 // API information endpoint
 app.get('/api', (req, res) => {

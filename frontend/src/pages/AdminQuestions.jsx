@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import { useSupabase } from '../contexts/SupabaseContext.jsx'
 import { useFeedback } from '../hooks/useFeedback.js'
 import { useAdminHelpers, formatFeedbackType, formatFeedbackStatus, getFeedbackTypeColor, getFeedbackStatusColor } from '../utils/adminHelpers.js'
+import AdminNavigation from '../components/AdminNavigation.jsx'
+import { MessageSquare, RefreshCw } from 'lucide-react'
 
 const AdminQuestions = () => {
   // Hooks
@@ -100,6 +102,12 @@ const AdminQuestions = () => {
     } catch (err) {
       console.error('Failed to claim question:', err)
     }
+  }
+
+  // Handle refresh
+  const handleRefresh = () => {
+    console.log('🔄 Manual refresh triggered')
+    loadFeedback()
   }
 
   // Handle create article
@@ -221,49 +229,27 @@ const AdminQuestions = () => {
   //   )
   // }
 
+  // Define right actions for navigation
+  const rightActions = [
+    {
+      label: 'Refresh',
+      icon: RefreshCw,
+      onClick: handleRefresh,
+      variant: 'default',
+      title: 'Refresh feedback data',
+      hideTextOnMobile: true
+    }
+  ]
+
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-blue-600 rounded-lg flex items-center justify-center">
-                <span className="text-white font-bold">A</span>
-              </div>
-              <div>
-                <h1 className="text-xl font-bold text-gray-900">ELSA Admin Dashboard</h1>
-                <p className="text-sm text-gray-500">Manage AI feedback submissions</p>
-              </div>
-            </div>
-            
-            <div className="flex items-center space-x-4">
-              <button
-                onClick={() => {
-                  console.log('🔄 Manual refresh triggered')
-                  loadFeedback()
-                }}
-                className="px-3 py-2 text-sm bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors"
-              >
-                🔄 Refresh
-              </button>
-              <button
-                onClick={() => navigate('/chat')}
-                className="px-3 py-2 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
-              >
-                Back to Chat
-              </button>
-              <span className="text-sm text-gray-600">Welcome, {user.email}</span>
-              <button
-                onClick={handleLogout}
-                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm"
-              >
-                Sign Out
-              </button>
-            </div>
-          </div>
-        </div>
-      </header>
+      {/* Unified Admin Navigation */}
+      <AdminNavigation
+        title="ELSA Admin Dashboard"
+        subtitle="Manage AI feedback submissions"
+        logoIcon={MessageSquare}
+        rightActions={rightActions}
+      />
 
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 py-6">
