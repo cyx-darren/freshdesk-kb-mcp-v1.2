@@ -13,10 +13,7 @@ const AdminQuestions = () => {
     loadFeedback, 
     subscribeToFeedback, 
     unsubscribeFromFeedback,
-    assignFeedback,
-    publishToDrafts,
-    publishToKnowledgeBase,
-    publishedArticleInfo
+    assignFeedback
   } = useFeedback()
 
   // State
@@ -29,23 +26,39 @@ const AdminQuestions = () => {
     dateTo: ''
   })
 
+  // Pagination state
+  const [pagination, setPagination] = useState({
+    page: 1,
+    limit: 20,
+    total: 0,
+    totalPages: 0
+  })
+
   // Load initial data
   useEffect(() => {
-    // Temporarily allow all users to load feedback data for testing
-    loadFeedback()
+    // Load feedback with pagination
+    loadFeedback({ 
+      limit: pagination.limit,
+      offset: (pagination.page - 1) * pagination.limit,
+      ...filters 
+    })
     
     // Set up real-time subscriptions
     const subscription = subscribeToFeedback(
       (payload) => {
         console.log('📬 Real-time feedback update:', payload)
-        loadFeedback() // Refresh data on any changes
+        loadFeedback({ 
+          limit: pagination.limit,
+          offset: (pagination.page - 1) * pagination.limit,
+          ...filters 
+        }) // Refresh data on any changes
       }
     )
 
     return () => {
       unsubscribeFromFeedback()
     }
-  }, [user])
+  }, [user, pagination.page, pagination.limit, filters])
 
   // Refresh data when page comes back into focus (e.g., after publishing an article)
   useEffect(() => {
@@ -92,7 +105,29 @@ const AdminQuestions = () => {
   // Handle refresh
   const handleRefresh = () => {
     console.log('🔄 Manual refresh triggered')
-    loadFeedback()
+    loadFeedback({ 
+      limit: pagination.limit,
+      offset: (pagination.page - 1) * pagination.limit,
+      ...filters 
+    })
+  }
+
+  // Pagination handlers
+  const handlePageChange = (newPage) => {
+    setPagination(prev => ({ ...prev, page: newPage }))
+  }
+
+  const handlePageSizeChange = (newLimit) => {
+    setPagination(prev => ({ 
+      ...prev, 
+      limit: newLimit, 
+      page: 1  // Reset to first page when changing page size
+    }))
+  }
+
+  const handleFilterChange = (newFilters) => {
+    setFilters(newFilters)
+    setPagination(prev => ({ ...prev, page: 1 })) // Reset to first page when filtering
   }
 
   // Handle create article
@@ -126,10 +161,8 @@ const AdminQuestions = () => {
 
   // Handle view article
   const handleViewArticle = (feedbackItem) => {
-    const publishedInfo = publishedArticleInfo[feedbackItem.id]
-    if (publishedInfo?.url) {
-      window.open(publishedInfo.url, '_blank')
-    }
+    // For now, we'll show an alert since we don't have published article info
+    alert('Article viewing functionality is not currently available')
   }
 
   // Helper functions
@@ -166,12 +199,6 @@ const AdminQuestions = () => {
 
   const getEnhancedStatus = (item) => {
     const baseStatus = item.status
-    
-    // Check if this feedback has published articles
-    const publishedInfo = publishedArticleInfo[item.id]
-    if (publishedInfo && publishedInfo.published_article_id) {
-      return 'published'
-    }
     
     // Check draft counts
     if (item.draft_count && item.draft_count > 0) {
@@ -276,8 +303,9 @@ const AdminQuestions = () => {
 
   // Check if published
   const hasPublished = (item) => {
-    const publishedInfo = publishedArticleInfo[item.id]
-    return publishedInfo && publishedInfo.published_article_id
+    // For now, we'll use a simple check based on status or other indicators
+    // This can be enhanced when proper published article tracking is implemented
+    return item.status === 'published' || item.enhanced_status === 'published'
   }
 
   return (
