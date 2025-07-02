@@ -51,7 +51,10 @@ function extractSearchTerms(message) {
     'installation', 'setup', 'troubleshoot', 'problem', 'issue', 'error', 'support',
     'difference', 'between', 'compare', 'comparison', 'vs', 'versus', 'options',
     'fabric', 'cotton', 'nylon', 'quality', 'durability', 'thickness', 'width',
-    'accessories', 'hardware', 'clips', 'hooks', 'attachments', 'customization'
+    'accessories', 'hardware', 'clips', 'hooks', 'attachments', 'customization',
+    // Add more specific product terms for better matching
+    'leather', 'card', 'holders', 'holder', 'colours', 'available', 'white', 'black',
+    'pvc', 'luggage', 'tag', 'tags', 'back', 'part', 'colour', 'restrictions'
   ])
 
   const words = message
@@ -83,59 +86,80 @@ function extractSearchTerms(message) {
 }
 
 /**
- * Parse articles from MCP text response
+ * Create refined keyword search (matching web app logic)
+ */
+function createKeywordSearch(extractedTerms) {
+  // Create a cleaner keyword-based search for better MCP results
+  // Focus on product-specific terms and important keywords
+  const keywordSearch = extractedTerms
+    .split(' ')
+    .filter(word => {
+      // Keep all important product terms
+      const importantProductTerms = ['leather', 'card', 'holders', 'holder', 'colors', 'colours', 
+                                   'available', 'lanyards', 'lanyard', 'tubular', 'polyester',
+                                   'printing', 'shipping', 'moq', 'minimum', 'order', 'quantity',
+                                   'white', 'black', 'pvc', 'luggage', 'tag', 'tags', 'back', 'part',
+                                   'colour', 'restrictions', 'material', 'materials']
+      
+      // Keep words longer than 3 characters that aren't generic question words
+      const genericWords = ['what', 'how', 'when', 'where', 'why', 'can', 'could', 'would', 'should']
+      
+      return importantProductTerms.includes(word.toLowerCase()) || 
+             (word.length > 3 && !genericWords.includes(word.toLowerCase()))
+    })
+    .slice(0, 6) // Keep up to 6 most relevant terms
+    .join(' ')
+    
+  return keywordSearch
+}
+
+/**
+ * Parse articles from MCP text response (matching web app implementation)
  */
 function parseArticlesFromText(text) {
-  const articleIds = []
+  const articles = []
   
   if (!text || typeof text !== 'string') {
-    return articleIds
+    return articles
   }
 
-  // Look for article ID patterns like:
-  // - #151000020926
-  // - Article #151000020926  
-  // - ID: 151000020926
-  // - (151000020926)
-  const articleIdPatterns = [
-    /#(\d{12,})/g,                    // #151000020926
-    /Article\s*#(\d{12,})/gi,         // Article #151000020926
-    /ID:\s*(\d{12,})/gi,              // ID: 151000020926
-    /\((\d{12,})\)/g,                 // (151000020926)
-    /Article\s+(\d{12,})/gi,          // Article 151000020926
-    /\*\*(\d{12,})\*\*/g              // **151000020926**
-  ]
+  // Split by article entries (numbered items)
+  const articleMatches = text.split(/\n\d+\.\s+\*\*/)
   
-  // Also look for numbered list patterns with IDs
-  const numberedListPattern = /^\d+\.\s*\*\*[^*]+\*\*.*?#(\d{12,})/gm
-  
-  const foundIds = new Set()
-  
-  // Extract IDs using all patterns
-  for (const pattern of articleIdPatterns) {
-    let match
-    while ((match = pattern.exec(text)) !== null) {
-      const id = match[1]
-      if (id && id.length >= 12) { // Freshdesk article IDs are typically 12+ digits
-        foundIds.add(id)
-      }
+  for (let i = 1; i < articleMatches.length; i++) {
+    const articleText = articleMatches[i]
+    
+    // Extract title (first line before **) 
+    const titleMatch = articleText.match(/^([^*\n]+)/)
+    const title = titleMatch ? titleMatch[1].trim() : 'Untitled'
+    
+    // Extract Article ID
+    const idMatch = articleText.match(/🆔 Article ID: (\d+)/)
+    const id = idMatch ? idMatch[1] : null
+    
+    // Extract content (between 📄 and 📅)
+    const contentMatch = articleText.match(/📄\s+(.+?)(?=\n\s+📅|$)/s)
+    let content = contentMatch ? contentMatch[1].trim() : ''
+    
+    // Clean up content - remove HTML tags and extra formatting
+    content = content
+      .replace(/<[^>]*>/g, '') // Remove HTML tags
+      .replace(/\.\.\.$/, '') // Remove trailing ellipsis
+      .trim()
+    
+    if (id && title) {
+      articles.push({
+        id: id,
+        title: title,
+        content: content || `Content for article ${title}`,
+        url: `https://easyprintsg.freshdesk.com/support/solutions/articles/${id}`,
+        source: 'freshdesk_kb'
+      })
     }
   }
   
-  // Extract from numbered lists
-  let match
-  while ((match = numberedListPattern.exec(text)) !== null) {
-    const id = match[1]
-    if (id && id.length >= 12) {
-      foundIds.add(id)
-    }
-  }
-  
-  // Convert Set to Array and return
-  const uniqueIds = Array.from(foundIds)
-  console.log(`[PARSE-ARTICLES] Found ${uniqueIds.length} unique article IDs in text:`, uniqueIds)
-  
-  return uniqueIds
+  console.log(`[PARSE-ARTICLES] Parsed ${articles.length} articles from MCP response`)
+  return articles
 }
 
 /**
@@ -187,13 +211,15 @@ router.post('/chat', validateBotAuth, async (req, res) => {
     }
 
     const cleanMessage = message.trim()
-    const searchTerms = extractSearchTerms(cleanMessage)
+    const extractedTerms = extractSearchTerms(cleanMessage)
+    const keywordSearch = createKeywordSearch(extractedTerms)
 
     console.log('[DISCORD-BOT] Processing request:', {
       discordUserId,
       discordChannelId,
       messageLength: cleanMessage.length,
-      searchTerms,
+      extractedTerms,
+      keywordSearch,
       sessionId,
       timestamp: new Date().toISOString()
     })
@@ -201,11 +227,12 @@ router.post('/chat', validateBotAuth, async (req, res) => {
     let knowledgebaseResults = []
     let searchError = null
 
-    // Search knowledge base via MCP
+    // Search knowledge base via MCP - ENHANCED TO MATCH WEB APP
     try {
-      console.log('[DISCORD-BOT] Searching knowledge base with terms:', searchTerms)
+      console.log('[DISCORD-BOT] Searching knowledge base with keyword terms:', keywordSearch)
       
-      const searchResult = await mcpClient.searchKnowledgeBase(searchTerms)
+      // Primary search with keyword terms and proper parameters (matching web app)
+      const searchResult = await mcpClient.searchKnowledgeBase(keywordSearch, null, 1, 15)
       
       console.log('[DISCORD-BOT] Raw MCP search result:', {
         hasResult: !!searchResult,
@@ -217,83 +244,143 @@ router.post('/chat', validateBotAuth, async (req, res) => {
         resultKeys: searchResult ? Object.keys(searchResult) : []
       })
       
+      // Parse the MCP response - it returns text content that needs to be parsed
+      let searchResults = []
       if (searchResult && searchResult.success && searchResult.articles && searchResult.articles.content) {
-        // MCP returns a formatted search summary in the first content item
         const articles = searchResult.articles.content
         if (articles.length > 0 && articles[0].type === 'text' && articles[0].text) {
           const searchSummary = articles[0].text
           console.log(`[DISCORD-BOT] Got search summary (${searchResult.total_results} total articles found)`)
           
-          // Extract article IDs from the search summary
-          const articleIds = parseArticlesFromText(searchSummary)
-          console.log(`[DISCORD-BOT] Extracted article IDs from search: ${articleIds.join(', ')}`)
+          // Parse articles from the formatted text response (matching web app)
+          searchResults = parseArticlesFromText(searchSummary)
+          console.log(`[DISCORD-BOT] Found ${searchResults.length} relevant articles with keyword search`)
           
-          // Fetch full content of the most relevant articles (limit to top 3 to avoid overwhelming Claude)
-          const articlesToFetch = articleIds.slice(0, 3)
-          console.log(`[DISCORD-BOT] Fetching full content for articles: ${articlesToFetch.join(', ')}`)
-          
-          for (const articleId of articlesToFetch) {
+          // FALLBACK SEARCH - If keyword search didn't return good results, try with the full extracted terms
+          if (searchResults.length < 3) {
+            console.log(`[DISCORD-BOT] Trying fallback search with extracted terms: "${extractedTerms}"`)
             try {
-              const articleResult = await mcpClient.getArticle(articleId)
+              const fallbackResult = await mcpClient.searchKnowledgeBase(extractedTerms, null, 1, 15)
+              const fallbackResponseText = fallbackResult.articles?.content?.[0]?.text || ''
+              const fallbackResults = parseArticlesFromText(fallbackResponseText)
+              
+              if (fallbackResults.length > searchResults.length) {
+                console.log(`[DISCORD-BOT] Fallback search found ${fallbackResults.length} articles - using fallback results`)
+                searchResults = fallbackResults
+              }
+            } catch (fallbackError) {
+              console.warn(`[DISCORD-BOT] Fallback search failed:`, fallbackError.message)
+            }
+          }
+          
+          console.log(`[DISCORD-BOT] Final article count: ${searchResults.length}`)
+          
+          // Fetch full content for the most relevant articles (INCREASE TO 5 to match web app)
+          const topArticles = searchResults.slice(0, 5)
+          console.log(`[DISCORD-BOT] Fetching full content for top ${topArticles.length} articles: ${topArticles.map(a => a.id).join(', ')}`)
+          
+          for (const article of topArticles) {
+            try {
+              console.log(`[DISCORD-BOT] Fetching full content for Article #${article.id}`)
+              const articleResult = await mcpClient.getArticle(article.id)
+              
               if (articleResult && articleResult.success && articleResult.article) {
-                const article = articleResult.article
+                const fullArticle = articleResult.article
                 
                 // Handle different article response formats
-                let articleContent = ''
-                let articleTitle = `Article #${articleId}`
+                let articleContent = article.content // fallback to original
+                let articleTitle = article.title || `Article #${article.id}`
                 
-                if (article.content && Array.isArray(article.content) && article.content[0]?.text) {
-                  articleContent = article.content[0].text
-                } else if (typeof article.content === 'string') {
-                  articleContent = article.content
-                } else if (article.description) {
-                  articleContent = article.description
-                }
-                
-                if (article.title) {
-                  articleTitle = article.title
-                } else if (article.content && Array.isArray(article.content)) {
-                  // Try to extract title from content
-                  for (const contentItem of article.content) {
-                    if (contentItem.text && contentItem.text.includes('Title:')) {
-                      const titleMatch = contentItem.text.match(/Title:\s*(.+)/i)
-                      if (titleMatch) {
-                        articleTitle = titleMatch[1].trim()
-                        break
-                      }
+                if (fullArticle.content && Array.isArray(fullArticle.content)) {
+                  // Content is in array format [{type: "text", text: "..."}]
+                  const textContent = fullArticle.content
+                    .filter(item => item.type === 'text')
+                    .map(item => item.text)
+                    .join('\n')
+                  
+                  if (textContent) {
+                    // Extract image URLs before cleaning HTML
+                    const imageUrls = []
+                    const imgRegex = /<img[^>]*src="([^"]*)"[^>]*>/g
+                    let imgMatch
+                    while ((imgMatch = imgRegex.exec(textContent)) !== null) {
+                      imageUrls.push(imgMatch[1])
+                    }
+                    
+                    // Clean up HTML tags and format nicely
+                    articleContent = textContent
+                      .replace(/<[^>]*>/g, '') // Remove HTML tags
+                      .replace(/&quot;/g, '"') // Decode HTML entities
+                      .replace(/&amp;/g, '&')
+                      .replace(/&lt;/g, '<')
+                      .replace(/&gt;/g, '>')
+                      .replace(/\n\s*\n/g, '\n\n') // Clean up multiple newlines
+                      .trim()
+                      
+                    // Add image reference information if images exist
+                    if (imageUrls.length > 0) {
+                      articleContent += '\n\n**Referenced Images in this article:**\n'
+                      imageUrls.forEach((url, index) => {
+                        articleContent += `${index + 1}. ${url}\n`
+                      })
+                      articleContent += '\n(Note: These images contain important visual information referenced in the article content)'
                     }
                   }
+                } else if (typeof fullArticle.content === 'string') {
+                  articleContent = fullArticle.content
                 }
+                
+                if (fullArticle.title) {
+                  articleTitle = fullArticle.title
+                }
+                
+                console.log(`[DISCORD-BOT] Extracted content length for #${article.id}:`, articleContent.length)
                 
                 if (articleContent) {
                   knowledgebaseResults.push({
-                    id: articleId,
+                    id: article.id,
                     title: articleTitle,
                     content: articleContent,
-                    url: `https://easyprintsg.freshdesk.com/support/solutions/articles/${articleId}`
+                    url: `https://easyprintsg.freshdesk.com/support/solutions/articles/${article.id}`,
+                    full_content_available: true
                   })
-                  console.log(`[DISCORD-BOT] Added full article ${articleId}: ${articleTitle}`)
+                  console.log(`[DISCORD-BOT] ✅ Enhanced Article #${article.id} with full content: ${articleTitle}`)
                 } else {
-                  console.log(`[DISCORD-BOT] No content found for article ${articleId}`)
+                  console.log(`[DISCORD-BOT] ❌ No content found for article ${article.id}`)
                 }
               }
             } catch (articleError) {
-              console.error(`[DISCORD-BOT] Failed to fetch article ${articleId}:`, articleError.message)
-              // Continue with other articles
+              console.error(`[DISCORD-BOT] Failed to fetch article ${article.id}:`, articleError.message)
+              // Continue with other articles - use original excerpt if full fetch fails
+              knowledgebaseResults.push({
+                id: article.id,
+                title: article.title,
+                content: article.content,
+                url: `https://easyprintsg.freshdesk.com/support/solutions/articles/${article.id}`
+              })
             }
           }
+          
+          // Add remaining articles without enhancement (if any)
+          const remainingArticles = searchResults.slice(5).map(article => ({
+            id: article.id,
+            title: article.title,
+            content: article.content,
+            url: `https://easyprintsg.freshdesk.com/support/solutions/articles/${article.id}`
+          }))
+          knowledgebaseResults.push(...remainingArticles)
           
           // If we couldn't fetch any articles, fall back to search summary
           if (knowledgebaseResults.length === 0) {
             knowledgebaseResults = [{
               id: 'search-summary',
-              title: `Search Results for "${searchTerms}"`,
+              title: `Search Results for "${keywordSearch}"`,
               content: searchSummary,
               url: `Freshdesk Knowledge Base Search`
             }]
             console.log('[DISCORD-BOT] Falling back to search summary (no articles fetched)')
           } else {
-            console.log(`[DISCORD-BOT] Successfully fetched ${knowledgebaseResults.length} full articles`)
+            console.log(`[DISCORD-BOT] Successfully fetched ${knowledgebaseResults.length} articles`)
           }
         } else {
           knowledgebaseResults = []
@@ -308,7 +395,8 @@ router.post('/chat', validateBotAuth, async (req, res) => {
           actualStructure: searchResult ? Object.keys(searchResult) : 'null'
         })
       }
-                    console.log('[DISCORD-BOT] MCP search completed successfully')
+      
+      console.log('[DISCORD-BOT] MCP search completed successfully')
     } catch (error) {
       searchError = error.message
       knowledgebaseResults = [] // Ensure we have an empty array for Claude
@@ -339,7 +427,7 @@ router.post('/chat', validateBotAuth, async (req, res) => {
           user_message: cleanMessage,
           ai_response: claudeResponse,
           articles_found: knowledgebaseResults.length,
-          search_terms: searchTerms,
+          search_terms: extractedTerms,
           source: 'discord-bot',
           discord_user_id: discordUserId,
           discord_channel_id: discordChannelId,
@@ -358,7 +446,7 @@ router.post('/chat', validateBotAuth, async (req, res) => {
         title: article.title,
         url: article.url
       })),
-      searchTerms,
+      searchTerms: extractedTerms,
       timestamp: new Date().toISOString(),
       articlesFound: knowledgebaseResults.length,
       sessionId: sessionId || `discord-${discordUserId}-${Date.now()}`
