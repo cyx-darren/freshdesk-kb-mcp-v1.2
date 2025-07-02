@@ -8,7 +8,7 @@
       "healthcheckPath": "/health"
     },
     "discordbot": {
-      "root": "/backend/discord-bot",
+      "root": "/discord-bot",
       "buildCommand": "npm install",
       "startCommand": "npm start",
       "dependencies": ["backend"],
