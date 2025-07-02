@@ -1,0 +1,28 @@
+{
+  "name": "freshdesk-backend",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "discord-bot": "node discord-bot/index.js",
+    "discord-bot:dev": "node --watch discord-bot/index.js",
+    "test-supabase": "node test-supabase.js",
+    "test-cleanup": "node test-supabase.js --cleanup"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.53.0",
+    "@supabase/supabase-js": "^2.38.0",
+    "axios": "^1.10.0",
+    "cors": "^2.8.5",
+    "discord.js": "^14.21.0",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "ioredis": "^5.6.1",
+    "jsonwebtoken": "^9.0.2",
+    "multer": "^2.0.1",
+    "node-fetch": "^3.3.2",
+    "nodemailer": "^7.0.3",
+    "playwright": "^1.53.1"
+  }
+}

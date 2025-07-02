@@ -1,0 +1,24 @@
+[build]
+builder = "Dockerfile"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+replicas = 1
+startCommand = "npm start"
+healthcheckPath = "/health"
+healthcheckTimeout = 300
+healthcheckInterval = 30
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10
+
+[env]
+NODE_ENV = "production"
+LOG_LEVEL = "info"
+RATE_LIMIT_ENABLED = "true"
+RATE_LIMIT_WINDOW_MS = "60000"
+RATE_LIMIT_MAX_REQUESTS = "30"
+HEALTH_PORT = "3001"
+METRICS_ENABLED = "true"
+
+[[services]]
+name = "discord-bot" 

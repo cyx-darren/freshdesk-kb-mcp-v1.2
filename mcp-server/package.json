@@ -1,0 +1,31 @@
+{
+  "name": "freshdesk-kb-mcp",
+  "version": "1.0.0",
+  "description": "Model Context Protocol server for Freshdesk Knowledge Base integration",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node http-wrapper.js",
+    "dev": "node --watch http-wrapper.js",
+    "mcp": "node src/index.js",
+    "mcp-dev": "node --watch src/index.js"
+  },
+  "keywords": [
+    "mcp",
+    "freshdesk",
+    "knowledge-base",
+    "model-context-protocol"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "axios": "^1.6.0",
+    "dotenv": "^16.3.0",
+    "express": "^4.18.2",
+    "zod": "^3.24.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+} 

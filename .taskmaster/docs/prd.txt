@@ -1,0 +1,98 @@
+<context>
+# Overview  
+Freshdesk Knowledge Base MCP - A comprehensive knowledge management system built with React frontend, Node.js backend, and Supabase database. The system provides article management, AI-powered chat assistance, bug reporting, feature requests, and administrative tools. The project integrates with Playwright for testing and uses MCP (Model Context Protocol) for AI interactions.
+
+Current state: The application has core functionality implemented but needs optimization, enhanced user experience, better performance, and additional enterprise features.
+
+# Core Features  
+- **Article Management System**: Create, edit, publish, and manage knowledge base articles with rich text editing
+- **AI-Powered Chat**: Interactive chat interface with AI assistance and feedback collection
+- **User Authentication**: Secure login/registration system with protected routes
+- **Administrative Dashboard**: Admin tools for managing articles, users, feedback, bugs, and feature requests
+- **Bug Reporting System**: Comprehensive bug tracking with file attachments and status management
+- **Feature Request System**: User-driven feature requests with voting and priority management
+- **Search & Discovery**: Article search with category filtering and SEO optimization
+- **Feedback Collection**: User feedback system for AI responses and articles
+- **Analytics & Reporting**: Usage analytics and performance metrics
+- **Playwright Integration**: Automated testing capabilities
+
+# User Experience  
+Primary users include:
+- **End Users**: Seeking information through articles and chat assistance
+- **Content Creators**: Writing and managing knowledge base content
+- **Administrators**: Managing the entire system and user feedback
+- **Developers**: Maintaining and enhancing the platform
+
+Key user flows need optimization for mobile responsiveness, loading performance, and intuitive navigation. The rich text editor experience should be enhanced for better content creation.
+</context>
+
+<PRD>
+# Technical Architecture  
+- **Frontend**: React 18 with Vite, TailwindCSS, React Router
+- **Backend**: Node.js with Express, middleware for authentication
+- **Database**: Supabase (PostgreSQL) with real-time subscriptions
+- **AI Integration**: Claude AI via MCP server, Playwright MCP for testing
+- **File Storage**: Supabase storage for attachments
+- **Deployment**: Railway platform with Docker containerization
+
+Current architecture is solid but needs performance optimization, better error handling, and enhanced security measures.
+
+# Development Roadmap  
+
+## Phase 1: Performance & Optimization (MVP Enhancement)
+- Implement lazy loading and code splitting for better performance
+- Optimize database queries and implement caching strategies
+- Enhance error handling and user feedback across all components
+- Improve mobile responsiveness and accessibility compliance
+- Implement comprehensive logging and monitoring
+
+## Phase 2: User Experience Enhancement
+- Redesign and optimize the rich text editor with better toolbar functionality
+- Implement advanced search with full-text search and filters
+- Add user preferences and customizable dashboards
+- Enhance the chat interface with better conversation management
+- Implement dark mode and theme customization
+
+## Phase 3: Advanced Features
+- Add real-time collaboration for article editing
+- Implement advanced analytics dashboard with detailed insights
+- Add export/import functionality for articles and data
+- Implement advanced user roles and permissions system
+- Add integration APIs for third-party tools
+
+## Phase 4: Enterprise Features
+- Implement multi-tenancy support
+- Add advanced security features (2FA, audit logs)
+- Implement workflow automation for content approval
+- Add advanced reporting and business intelligence features
+- Implement backup and disaster recovery systems
+
+# Logical Dependency Chain
+1. **Foundation**: Database optimization and caching (essential for all features)
+2. **Performance**: Frontend optimization and lazy loading (improves user experience immediately)
+3. **Core UX**: Enhanced rich text editor and search (directly impacts daily usage)
+4. **User Management**: Advanced roles and permissions (enables team collaboration)
+5. **Analytics**: Enhanced reporting and insights (provides business value)
+6. **Advanced Features**: Real-time collaboration and integrations (adds competitive advantage)
+7. **Enterprise**: Multi-tenancy and advanced security (enables scaling)
+
+Each phase builds upon the previous, ensuring continuous value delivery while maintaining system stability.
+
+# Risks and Mitigations  
+- **Performance Risk**: Large articles and media files could impact load times
+  - Mitigation: Implement progressive loading and CDN integration
+- **Database Scaling**: Growing content and users may stress current database setup
+  - Mitigation: Implement connection pooling and query optimization
+- **Security Risk**: User-generated content and file uploads present security challenges
+  - Mitigation: Implement comprehensive input validation and file scanning
+- **Integration Complexity**: MCP integrations may become complex to maintain
+  - Mitigation: Create abstraction layers and comprehensive testing
+
+# Appendix  
+- Current tech stack is modern and well-chosen
+- Existing Playwright integration provides good testing foundation
+- Supabase integration is well-implemented with real-time features
+- Rich text editor has good foundation but needs enhancement
+- Bug reporting and feature request systems are functional but could be more sophisticated
+- Current deployment setup on Railway is appropriate for current scale
+</PRD> 

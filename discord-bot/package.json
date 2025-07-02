@@ -1,0 +1,29 @@
+{
+  "name": "freshdesk-discord-bot",
+  "version": "1.0.0",
+  "description": "Discord bot for Freshdesk Knowledge Base integration",
+  "main": "index.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "discord.js": "^14.21.0",
+    "axios": "^1.10.0",
+    "dotenv": "^16.3.1",
+    "ioredis": "^5.3.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "discord",
+    "bot",
+    "freshdesk",
+    "knowledge-base"
+  ],
+  "author": "Freshdesk KB Team",
+  "license": "MIT"
+} 
