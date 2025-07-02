@@ -61,7 +61,7 @@ export const useFeedback = () => {
   const loadFeedback = useCallback(async (options = {}) => {
     if (!feedbackService) {
       setError('Feedback service not available')
-      return
+      return { success: false, error: 'Feedback service not available' }
     }
 
     setLoading(true)
@@ -72,14 +72,25 @@ export const useFeedback = () => {
       
       if (result.success) {
         setFeedback(result.data.feedback || [])
-        return result.data
+        // Return the full result data including pagination info
+        return {
+          success: true,
+          feedback: result.data.feedback || [],
+          total: result.data.totalCount || 0,
+          totalPages: result.data.totalPages || 0,
+          page: result.data.page || 1,
+          limit: result.data.limit || 20
+        }
       } else {
         setError(result.error)
         setFeedback([])
+        return { success: false, error: result.error }
       }
     } catch (err) {
-      setError(err.message || 'Failed to load feedback')
+      const errorMessage = err.message || 'Failed to load feedback'
+      setError(errorMessage)
       setFeedback([])
+      return { success: false, error: errorMessage }
     } finally {
       setLoading(false)
     }
