@@ -1,8 +1,20 @@
 {
+  "functions": {},
   "rewrites": [
     {
-      "source": "/((?!api/).*)",
+      "source": "/((?!\\.well-known|api|_next|_static|_vercel|[\\w-]+\\.\\w+).*)",
       "destination": "/index.html"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/assets/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
     }
   ]
 } 
