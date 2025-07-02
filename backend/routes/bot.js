@@ -152,7 +152,7 @@ function parseArticlesFromText(text) {
         id: id,
         title: title,
         content: content || `Content for article ${title}`,
-        url: `https://easyprintsg.freshdesk.com/support/solutions/articles/${id}`,
+        url: `https://easyprint.freshdesk.com/a/solutions/articles/${id}`,
         source: 'freshdesk_kb'
       })
     }
@@ -341,7 +341,7 @@ router.post('/chat', validateBotAuth, async (req, res) => {
                     id: article.id,
                     title: articleTitle,
                     content: articleContent,
-                    url: `https://easyprintsg.freshdesk.com/support/solutions/articles/${article.id}`,
+                    url: `https://easyprint.freshdesk.com/a/solutions/articles/${article.id}`,
                     full_content_available: true
                   })
                   console.log(`[DISCORD-BOT] ✅ Enhanced Article #${article.id} with full content: ${articleTitle}`)
@@ -356,7 +356,7 @@ router.post('/chat', validateBotAuth, async (req, res) => {
                 id: article.id,
                 title: article.title,
                 content: article.content,
-                url: `https://easyprintsg.freshdesk.com/support/solutions/articles/${article.id}`
+                url: `https://easyprint.freshdesk.com/a/solutions/articles/${article.id}`
               })
             }
           }
@@ -366,7 +366,7 @@ router.post('/chat', validateBotAuth, async (req, res) => {
             id: article.id,
             title: article.title,
             content: article.content,
-            url: `https://easyprintsg.freshdesk.com/support/solutions/articles/${article.id}`
+            url: `https://easyprint.freshdesk.com/a/solutions/articles/${article.id}`
           }))
           knowledgebaseResults.push(...remainingArticles)
           
