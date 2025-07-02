@@ -1,116 +1,57 @@
 import React, { useState, useEffect, useCallback } from 'react'
+import { useFeedback } from '../hooks/useFeedback'
+import { useAuth } from '../contexts/AuthContext'
 import { useNavigate } from 'react-router-dom'
-import { useSupabase } from '../contexts/SupabaseContext.jsx'
-import { useFeedback } from '../hooks/useFeedback.js'
-import { useAdminHelpers, formatFeedbackType, formatFeedbackStatus, getFeedbackTypeColor, getFeedbackStatusColor } from '../utils/adminHelpers.js'
-import AdminNavigation from '../components/AdminNavigation.jsx'
-import { MessageSquare, RefreshCw } from 'lucide-react'
 
 const AdminQuestions = () => {
-  // Hooks
-  const { user, logout } = useSupabase()
   const navigate = useNavigate()
+  const { user, isAuthenticated, logout } = useAuth()
   const { 
     feedback, 
     loading, 
     error, 
     loadFeedback, 
-    assignFeedback, 
-    updateFeedbackStatus,
-    subscribeToFeedback,
+    subscribeToFeedback, 
     unsubscribeFromFeedback,
-    clearError 
+    assignFeedback,
+    publishToDrafts,
+    publishToKnowledgeBase,
+    publishedArticleInfo
   } = useFeedback()
-  const { isAdmin, hasAdminAccess, userId } = useAdminHelpers()
 
   // State
   const [selectedFeedback, setSelectedFeedback] = useState(null)
   const [showDetailModal, setShowDetailModal] = useState(false)
-  const [pagination, setPagination] = useState({
-    page: 1,
-    limit: 20,
-    total: 0,
-    totalPages: 0
-  })
   const [filters, setFilters] = useState({
     feedbackType: '',
     status: '',
-    dateFrom: '',
+    platform: '',
     dateTo: ''
   })
 
-  // Check admin access
+  // Load initial data
   useEffect(() => {
-    if (!user) {
-      navigate('/login')
-      return
-    }
+    // Temporarily allow all users to load feedback data for testing
+    loadFeedback()
     
-    // Temporarily disabled for testing - allow all users to access admin dashboard
-    // if (!hasAdminAccess) {
-    //   navigate('/chat') // Redirect non-admin users
-    //   return
-    // }
-  }, [user, hasAdminAccess, navigate])
-
-  // Load feedback data with pagination
-  const loadFeedbackData = useCallback(async () => {
-    try {
-      const options = {
-        page: pagination.page,
-        limit: pagination.limit,
-        status: filters.status || null,
-        feedbackType: filters.feedbackType || null,
-        sortBy: 'created_at',
-        sortOrder: 'desc'
-      }
-
-      const result = await loadFeedback(options)
-      if (result && result.total !== undefined) {
-        setPagination(prev => ({
-          ...prev,
-          total: result.total,
-          totalPages: Math.ceil(result.total / prev.limit)
-        }))
-      }
-    } catch (error) {
-      console.error('Error loading feedback data:', error)
-    }
-  }, [pagination.page, pagination.limit, filters, loadFeedback])
-
-  // Load initial data and setup subscriptions
-  useEffect(() => {
-    if (user) {
-      loadFeedbackData()
-    }
-  }, [user, loadFeedbackData])
-
-  // Load data when pagination or filters change
-  useEffect(() => {
-    if (user) {
-      loadFeedbackData()
-    }
-  }, [pagination.page, pagination.limit, filters])
-
-  // Set up real-time subscriptions
-  useEffect(() => {
+    // Set up real-time subscriptions
     const subscription = subscribeToFeedback(
       (payload) => {
         console.log('📬 Real-time feedback update:', payload)
-        loadFeedbackData() // Refresh data on any changes
+        loadFeedback() // Refresh data on any changes
       }
     )
 
     return () => {
       unsubscribeFromFeedback()
     }
-  }, [loadFeedbackData])
+  }, [user])
 
   // Refresh data when page comes back into focus (e.g., after publishing an article)
   useEffect(() => {
     const handleFocus = () => {
       console.log('🔄 Page focused, refreshing feedback data...')
-      loadFeedbackData()
+      loadFeedback()
     }
 
     window.addEventListener('focus', handleFocus)
@@ -118,15 +59,16 @@ const AdminQuestions = () => {
     return () => {
       window.removeEventListener('focus', handleFocus)
     }
-  }, [loadFeedbackData])
+  }, [loadFeedback])
 
   // Handle logout
   const handleLogout = async () => {
     try {
       await logout()
+      console.log('✅ Logged out successfully')
       navigate('/login')
     } catch (error) {
-      console.error('Logout error:', error)
+      console.error('❌ Logout error:', error)
     }
   }
 
@@ -134,228 +76,280 @@ const AdminQuestions = () => {
   const handleRowClick = (feedbackItem) => {
     setSelectedFeedback(feedbackItem)
     setShowDetailModal(true)
+    console.log('📝 Viewing feedback details:', feedbackItem)
   }
 
   // Handle claim question
   const handleClaimQuestion = async (feedbackId) => {
-    try {
-      await assignFeedback(feedbackId, userId)
-    } catch (err) {
-      console.error('Failed to claim question:', err)
+    if (!user?.id) return
+    
+    const result = await assignFeedback(feedbackId, user.id)
+    if (result.success) {
+      console.log('✅ Question claimed successfully')
     }
-  }
-
-  // Handle filter changes
-  const handleFilterChange = (key, value) => {
-    setFilters(prev => ({ ...prev, [key]: value }))
-    setPagination(prev => ({ ...prev, page: 1 })) // Reset to page 1 when filtering
-  }
-
-  // Handle pagination
-  const handlePageChange = (newPage) => {
-    setPagination(prev => ({ ...prev, page: newPage }))
-  }
-
-  // Handle page size change
-  const handlePageSizeChange = (newLimit) => {
-    setPagination(prev => ({ ...prev, limit: newLimit, page: 1 }))
   }
 
   // Handle refresh
   const handleRefresh = () => {
     console.log('🔄 Manual refresh triggered')
-    loadFeedbackData()
+    loadFeedback()
   }
 
   // Handle create article
   const handleCreateArticle = (feedbackItem) => {
-    // Navigate to article editor with the question data
-    navigate('/article-editor', {
+    console.log('📝 Creating article for feedback:', feedbackItem.id)
+    
+    // Navigate to create article page with feedback data
+    navigate('/admin/create-article', {
       state: {
-        originalQuestion: feedbackItem.question,
+        feedbackId: feedbackItem.id,
+        question: feedbackItem.question,
         aiResponse: feedbackItem.ai_response,
         feedbackType: feedbackItem.feedback_type,
-        feedbackId: feedbackItem.id
+        platform: feedbackItem.platform
       }
     })
   }
 
   // Handle view drafts
   const handleViewDrafts = (feedbackItem) => {
-    console.log('Viewing drafts for feedback:', feedbackItem.id)
-    navigate('/article-editor', {
+    console.log('📝 Viewing drafts for feedback:', feedbackItem.id)
+    
+    // Navigate to drafts page with feedback data
+    navigate('/admin/drafts', {
       state: {
-        fromAdminQuestions: true,
         feedbackId: feedbackItem.id,
-        originalQuestion: feedbackItem.question,
-        aiResponse: feedbackItem.ai_response,
-        feedbackType: feedbackItem.feedback_type,
-        showDrafts: true
+        question: feedbackItem.question
       }
     })
   }
 
-  // Handle view published article
+  // Handle view article
   const handleViewArticle = (feedbackItem) => {
-    if (feedbackItem.published_article_id) {
-      // Open Freshdesk article in new tab
-      window.open(`https://easyprint.freshdesk.com/a/solutions/articles/${feedbackItem.published_article_id}`, '_blank')
+    const publishedInfo = publishedArticleInfo[feedbackItem.id]
+    if (publishedInfo?.url) {
+      window.open(publishedInfo.url, '_blank')
     }
   }
 
-  // Truncate text
+  // Helper functions
   const truncateText = (text, maxLength = 60) => {
     if (!text) return ''
     return text.length > maxLength ? text.substring(0, maxLength) + '...' : text
   }
 
-  // Format date
   const formatDate = (dateString) => {
-    return new Date(dateString).toLocaleString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    })
-  }
-
-  // Format draft count display
-  const formatDraftCount = (count, drafts = []) => {
-    if (count === 0) return ''
-    const draftTitles = drafts.map(draft => draft.title || 'Untitled').join(', ')
-    return {
-      display: count === 1 ? '1 draft' : `${count} drafts`,
-      title: `Drafts: ${draftTitles}`
-    }
-  }
-
-  // Get enhanced status display
-  const getEnhancedStatus = (item) => {
-    // Debug logging to see what data we're getting
-    if (item.question && item.question.toLowerCase().includes('minimum order') && item.question.toLowerCase().includes('fridge magnet')) {
-      console.log('[DEBUG] Fridge magnet question data:', {
-        id: item.id,
-        question: item.question,
-        status: item.status,
-        has_published: item.has_published,
-        published_article_id: item.published_article_id
+    if (!dateString) return 'Unknown'
+    try {
+      return new Date(dateString).toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
       })
-    }
-    
-    // Check if article has been published (either by has_published flag or by having a published_article_id and completed status)
-    if (item.has_published || (item.published_article_id && item.status === 'completed')) {
-      return {
-        display: '✅ Published',
-        className: 'bg-green-100 text-green-800',
-        tooltip: `Article published${item.published_article_id ? ` (ID: ${item.published_article_id})` : ''}`
-      }
-    }
-    
-    // If feedback type is "correct", no action needed
-    if (item.feedback_type === 'correct') {
-      return {
-        display: '', // Empty status for correct responses
-        className: '',
-        tooltip: 'AI response was marked as correct - no article needed'
-      }
-    }
-    
-    // Default status for incorrect and needs_improvement
-    return {
-      display: formatFeedbackStatus(item.status),
-      className: getFeedbackStatusColor(item.status),
-      tooltip: null
+    } catch (error) {
+      return 'Invalid Date'
     }
   }
 
-  if (!user) {
+  const formatDraftCount = (count, drafts = []) => {
+    if (!count || count === 0) return ''
+    
+    // Find the most recent draft
+    const mostRecent = drafts.reduce((latest, current) => {
+      return new Date(current.created_at) > new Date(latest.created_at) ? current : latest
+    }, drafts[0])
+    
+    return `${count} draft${count > 1 ? 's' : ''} (latest: ${formatDate(mostRecent?.created_at)})`
+  }
+
+  const getEnhancedStatus = (item) => {
+    const baseStatus = item.status
+    
+    // Check if this feedback has published articles
+    const publishedInfo = publishedArticleInfo[item.id]
+    if (publishedInfo && publishedInfo.published_article_id) {
+      return 'published'
+    }
+    
+    // Check draft counts
+    if (item.draft_count && item.draft_count > 0) {
+      return 'draft'
+    }
+    
+    return baseStatus
+  }
+
+  const getFeedbackTypeColor = (type) => {
+    switch (type) {
+      case 'correct':
+        return 'bg-green-100 text-green-800'
+      case 'incorrect':
+        return 'bg-red-100 text-red-800'
+      case 'needs_improvement':
+        return 'bg-yellow-100 text-yellow-800'
+      case 'partially_correct':
+        return 'bg-blue-100 text-blue-800'
+      default:
+        return 'bg-gray-100 text-gray-800'
+    }
+  }
+
+  const formatFeedbackType = (type) => {
+    switch (type) {
+      case 'needs_improvement':
+        return 'Needs Improvement'
+      case 'partially_correct':
+        return 'Partially Correct'
+      default:
+        return type.charAt(0).toUpperCase() + type.slice(1)
+    }
+  }
+
+  const getFeedbackStatusColor = (status) => {
+    switch (status) {
+      case 'pending':
+        return 'bg-yellow-100 text-yellow-800'
+      case 'in_progress':
+        return 'bg-blue-100 text-blue-800'
+      case 'published':
+        return 'bg-green-100 text-green-800'
+      case 'draft':
+        return 'bg-orange-100 text-orange-800'
+      default:
+        return 'bg-gray-100 text-gray-800'
+    }
+  }
+
+  const formatFeedbackStatus = (status) => {
+    switch (status) {
+      case 'in_progress':
+        return 'In Progress'
+      default:
+        return status.charAt(0).toUpperCase() + status.slice(1)
+    }
+  }
+
+  if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
       </div>
     )
   }
 
-  // Temporarily disabled for testing - allow all users to access admin dashboard
-  // if (!hasAdminAccess) {
-  //   return (
-  //     <div className="min-h-screen flex items-center justify-center bg-gray-50">
-  //       <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-  //     </div>
-  //   )
-  // }
+  if (error) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-red-600 text-center">
+          <p className="text-xl mb-4">Error loading feedback</p>
+          <p className="text-sm">{error}</p>
+          <button 
+            onClick={handleRefresh}
+            className="mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    )
+  }
 
-  // Define right actions for navigation
-  const rightActions = [
-    {
-      label: 'Refresh',
-      icon: RefreshCw,
-      onClick: handleRefresh,
-      variant: 'default',
-      title: 'Refresh feedback data',
-      hideTextOnMobile: true
+  // Get enhanced feedback with status calculations
+  const enhancedFeedback = feedback.map(item => ({
+    ...item,
+    enhanced_status: getEnhancedStatus(item)
+  }))
+
+  // Apply filters
+  const filteredFeedback = enhancedFeedback.filter(item => {
+    if (filters.feedbackType && item.feedback_type !== filters.feedbackType) return false
+    if (filters.status && item.enhanced_status !== filters.status) return false
+    if (filters.platform && item.platform !== filters.platform) return false
+    if (filters.dateTo) {
+      const itemDate = new Date(item.created_at).toISOString().split('T')[0]
+      if (itemDate > filters.dateTo) return false
     }
-  ]
+    return true
+  })
+
+  // Check if published
+  const hasPublished = (item) => {
+    const publishedInfo = publishedArticleInfo[item.id]
+    return publishedInfo && publishedInfo.published_article_id
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Unified Admin Navigation */}
-      <AdminNavigation
-        title="ELSA Admin Dashboard"
-        subtitle="Manage AI feedback submissions"
-        logoIcon={MessageSquare}
-        rightActions={rightActions}
-      />
+      {/* Header */}
+      <div className="bg-white shadow-sm border-b">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center h-16">
+            <div className="flex items-center">
+              <h1 className="text-xl font-semibold text-gray-900">Admin - Questions & Feedback</h1>
+            </div>
+            <div className="flex items-center space-x-4">
+              <button
+                onClick={handleRefresh}
+                className="px-3 py-2 text-sm bg-blue-100 text-blue-700 rounded-md hover:bg-blue-200 transition-colors"
+              >
+                Refresh
+              </button>
+              <span className="text-sm text-gray-600">
+                Welcome, {user?.email || 'Admin'}
+              </span>
+              <button
+                onClick={handleLogout}
+                className="px-3 py-2 text-sm bg-red-100 text-red-700 rounded-md hover:bg-red-200 transition-colors"
+              >
+                Logout
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
 
-      {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-4 py-6">
+      {/* Main content */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Filters */}
-        <div className="bg-white rounded-lg shadow-sm border p-4 mb-6">
+        <div className="bg-white p-6 rounded-lg shadow-sm border mb-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Filters</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {/* Feedback Type Filter */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Feedback Type
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Feedback Type</label>
               <select
                 value={filters.feedbackType}
-                onChange={(e) => handleFilterChange('feedbackType', e.target.value)}
+                onChange={(e) => setFilters(prev => ({ ...prev, feedbackType: e.target.value }))}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
                 <option value="">All Types</option>
                 <option value="correct">Correct</option>
                 <option value="incorrect">Incorrect</option>
                 <option value="needs_improvement">Needs Improvement</option>
+                <option value="partially_correct">Partially Correct</option>
               </select>
             </div>
-
-            {/* Status Filter */}
+            
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Status
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
               <select
                 value={filters.status}
-                onChange={(e) => handleFilterChange('status', e.target.value)}
+                onChange={(e) => setFilters(prev => ({ ...prev, status: e.target.value }))}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
-                <option value="">All Status</option>
+                <option value="">All Statuses</option>
                 <option value="pending">Pending</option>
-                <option value="in_progress">In Progress</option>
-                <option value="completed">Completed</option>
+                <option value="draft">Has Drafts</option>
+                <option value="published">Published</option>
               </select>
             </div>
 
-            {/* Platform Filter */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Platform
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Platform</label>
               <select
                 value={filters.platform || ''}
-                onChange={(e) => handleFilterChange('platform', e.target.value)}
+                onChange={(e) => setFilters(prev => ({ ...prev, platform: e.target.value }))}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
                 <option value="">All Platforms</option>
@@ -364,26 +358,20 @@ const AdminQuestions = () => {
               </select>
             </div>
 
-            {/* Date To Filter */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Date To
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Date To</label>
               <input
                 type="date"
                 value={filters.dateTo}
-                onChange={(e) => handleFilterChange('dateTo', e.target.value)}
+                onChange={(e) => setFilters(prev => ({ ...prev, dateTo: e.target.value }))}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
           </div>
           
-          <div className="flex justify-end mt-4">
+          <div className="mt-4 flex justify-end">
             <button
-              onClick={() => {
-                setFilters({ feedbackType: '', status: '', platform: '', dateTo: '' })
-                setPagination(prev => ({ ...prev, page: 1 }))
-              }}
+              onClick={() => setFilters({ feedbackType: '', status: '', platform: '', dateTo: '' })}
               className="px-4 py-2 text-sm bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors"
             >
               Clear Filters
@@ -391,273 +379,131 @@ const AdminQuestions = () => {
           </div>
         </div>
 
-        {/* Error Display */}
-        {error && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <div className="w-5 h-5 bg-red-500 rounded-full flex items-center justify-center">
-                  <span className="text-white text-xs">!</span>
-                </div>
-                <p className="text-red-800 text-sm font-medium">Error loading feedback</p>
-              </div>
-              <button
-                onClick={clearError}
-                className="text-red-500 hover:text-red-700"
-              >
-                ✕
-              </button>
-            </div>
-            <p className="text-red-700 text-sm mt-1">{error}</p>
-          </div>
-        )}
-
-        {/* Table */}
+        {/* Feedback table */}
         <div className="bg-white rounded-lg shadow-sm border overflow-hidden">
-          <div className="px-4 py-3 border-b border-gray-200 flex justify-between items-center">
+          <div className="px-4 py-3 border-b border-gray-200">
             <h2 className="text-lg font-semibold text-gray-900">
-              Feedback Submissions ({pagination.total})
+              Feedback Submissions ({filteredFeedback.length})
             </h2>
-            <div className="flex items-center space-x-4">
-              <div className="flex items-center space-x-2">
-                <label className="text-sm font-medium text-gray-700">Show:</label>
-                <select
-                  value={pagination.limit}
-                  onChange={(e) => handlePageSizeChange(parseInt(e.target.value))}
-                  className="pl-3 pr-8 py-1 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value={20}>20</option>
-                  <option value={50}>50</option>
-                  <option value={100}>100</option>
-                </select>
-                <span className="text-sm text-gray-700">per page</span>
-              </div>
-              {pagination.totalPages > 1 && (
-                <div className="text-sm text-gray-700">
-                  Page {pagination.page} of {pagination.totalPages}
-                </div>
-              )}
-            </div>
           </div>
-
-          {loading ? (
-            <div className="p-8 text-center">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-              <p className="text-gray-600">Loading feedback submissions...</p>
-            </div>
-          ) : feedback.length === 0 ? (
-            <div className="p-8 text-center">
-              <p className="text-gray-500">No feedback submissions found.</p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Question
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Type
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Platform
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Status
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Drafts
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Assigned To
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {feedback.map((item) => {
-                    const statusInfo = getEnhancedStatus(item)
-                    const draftInfo = formatDraftCount(item.draft_count || 0, item.drafts || [])
-                    const hasPublished = item.has_published || (item.published_article_id && item.status === 'completed')
-                    
-                    return (
-                      <tr 
-                        key={item.id}
-                        className={`hover:bg-gray-50 cursor-pointer ${hasPublished ? 'bg-green-50' : ''}`}
-                        onClick={() => handleRowClick(item)}
-                      >
-                        <td className="px-4 py-4">
-                          <div className="text-sm font-medium text-gray-900">
-                            {truncateText(item.question)}
-                          </div>
-                          <div className="text-xs text-gray-500 mt-1">
-                            {formatDate(item.created_at)}
-                          </div>
-                        </td>
-                        <td className="px-4 py-4">
-                          <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${getFeedbackTypeColor(item.feedback_type)}`}>
-                            {formatFeedbackType(item.feedback_type)}
-                          </span>
-                        </td>
-                        <td className="px-4 py-4">
-                          <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
-                            item.platform === 'discord' 
-                              ? 'bg-purple-100 text-purple-800' 
-                              : 'bg-blue-100 text-blue-800'
-                          }`}>
-                            {item.platform === 'discord' ? '💬 Discord' : '🌐 Web'}
-                          </span>
-                        </td>
-                        <td className="px-4 py-4">
-                          <span 
-                            className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${statusInfo.className}`}
-                            title={statusInfo.tooltip}
+          
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Question</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">AI Response</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Feedback</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Platform</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Assigned To</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {filteredFeedback.map((item, index) => (
+                  <tr 
+                    key={item.id} 
+                    className="hover:bg-gray-50 cursor-pointer"
+                    onClick={() => handleRowClick(item)}
+                  >
+                    <td className="px-4 py-4 text-sm text-gray-900">
+                      {truncateText(item.question, 60)}
+                    </td>
+                    <td className="px-4 py-4 text-sm text-gray-600">
+                      {truncateText(item.ai_response, 80)}
+                    </td>
+                    <td className="px-4 py-4">
+                      <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${getFeedbackTypeColor(item.feedback_type)}`}>
+                        {formatFeedbackType(item.feedback_type)}
+                      </span>
+                    </td>
+                    <td className="px-4 py-4">
+                      <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
+                        item.platform === 'discord' 
+                          ? 'bg-purple-100 text-purple-800' 
+                          : 'bg-blue-100 text-blue-800'
+                      }`}>
+                        {item.platform === 'discord' ? '💬 Discord' : '🌐 Web'}
+                      </span>
+                    </td>
+                    <td className="px-4 py-4">
+                      <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${getFeedbackStatusColor(item.enhanced_status)}`}>
+                        {formatFeedbackStatus(item.enhanced_status)}
+                      </span>
+                    </td>
+                    <td className="px-4 py-4 text-sm text-gray-600">
+                      {formatDate(item.created_at)}
+                    </td>
+                    <td className="px-4 py-4 text-sm text-gray-600">
+                      {item.assigned_to_email || 'Unassigned'}
+                    </td>
+                    <td className="px-4 py-4">
+                      <div className="flex space-x-2">
+                        {!item.assigned_to && item.feedback_type !== 'correct' && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleClaimQuestion(item.id)
+                            }}
+                            className="px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors"
                           >
-                            {statusInfo.display}
-                          </span>
-                        </td>
-                        <td className="px-4 py-4">
-                          {draftInfo && (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                handleViewDrafts(item)
-                              }}
-                              className="inline-flex items-center space-x-1 px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors"
-                              title={draftInfo.title}
-                            >
-                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                              </svg>
-                              <span>{draftInfo.display}</span>
-                            </button>
-                          )}
-                        </td>
-                        <td className="px-4 py-4 text-sm text-gray-500">
-                          {item.assigned_to_email || 'Unassigned'}
-                        </td>
-                        <td className="px-4 py-4">
-                          <div className="flex space-x-2">
-                            {!item.assigned_to && item.feedback_type !== 'correct' && (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  handleClaimQuestion(item.id)
-                                }}
-                                className="px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors"
-                              >
-                                Claim
-                              </button>
-                            )}
-                            
-                            {/* Show different actions based on status */}
-                            {hasPublished ? (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  handleViewArticle(item)
-                                }}
-                                className="px-2 py-1 text-xs bg-green-100 text-green-700 rounded hover:bg-green-200 transition-colors flex items-center space-x-1"
-                                title={`View article: ${item.published_article_title || 'Untitled'}`}
-                              >
-                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                                </svg>
-                                <span>View Article</span>
-                              </button>
-                            ) : item.draft_count > 0 ? (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  handleViewDrafts(item)
-                                }}
-                                className="px-2 py-1 text-xs bg-orange-100 text-orange-700 rounded hover:bg-orange-200 transition-colors flex items-center space-x-1"
-                                title="Edit existing drafts"
-                              >
-                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                </svg>
-                                <span>Edit Draft ({item.draft_count})</span>
-                              </button>
-                            ) : (item.feedback_type === 'needs_improvement' || item.feedback_type === 'incorrect') && (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  handleCreateArticle(item)
-                                }}
-                                className="px-2 py-1 text-xs bg-green-100 text-green-700 rounded hover:bg-green-200 transition-colors flex items-center space-x-1"
-                                title="Create Knowledge Base Article"
-                              >
-                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                                </svg>
-                                <span>Create Article</span>
-                              </button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
-
-          {/* Pagination Controls */}
-          {pagination.totalPages > 1 && (
-            <div className="px-4 py-3 border-t border-gray-200 flex items-center justify-between">
-              <div className="text-sm text-gray-700">
-                Showing {((pagination.page - 1) * pagination.limit) + 1} to{' '}
-                {Math.min(pagination.page * pagination.limit, pagination.total)} of{' '}
-                {pagination.total} results
-              </div>
-              <div className="flex items-center space-x-2">
-                <button
-                  onClick={() => handlePageChange(pagination.page - 1)}
-                  disabled={pagination.page === 1}
-                  className="px-3 py-1 text-sm border border-gray-300 rounded-md bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Previous
-                </button>
-                
-                {/* Page numbers */}
-                {Array.from({ length: Math.min(5, pagination.totalPages) }, (_, i) => {
-                  const pageNum = pagination.page <= 3 
-                    ? i + 1 
-                    : pagination.page >= pagination.totalPages - 2
-                      ? pagination.totalPages - 4 + i
-                      : pagination.page - 2 + i
-                  
-                  if (pageNum < 1 || pageNum > pagination.totalPages) return null
-                  
-                  return (
-                    <button
-                      key={pageNum}
-                      onClick={() => handlePageChange(pageNum)}
-                      className={`px-3 py-1 text-sm border rounded-md ${
-                        pageNum === pagination.page
-                          ? 'bg-blue-600 border-blue-600 text-white'
-                          : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50'
-                      }`}
-                    >
-                      {pageNum}
-                    </button>
-                  )
-                })}
-                
-                <button
-                  onClick={() => handlePageChange(pagination.page + 1)}
-                  disabled={pagination.page === pagination.totalPages}
-                  className="px-3 py-1 text-sm border border-gray-300 rounded-md bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Next
-                </button>
-              </div>
-            </div>
-          )}
+                            Claim
+                          </button>
+                        )}
+                        
+                        {/* Show different actions based on status */}
+                        {hasPublished(item) ? (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleViewArticle(item)
+                            }}
+                            className="px-2 py-1 text-xs bg-green-100 text-green-700 rounded hover:bg-green-200 transition-colors flex items-center space-x-1"
+                            title={`View article: ${item.published_article_title || 'Untitled'}`}
+                          >
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                            </svg>
+                            <span>View Article</span>
+                          </button>
+                        ) : item.draft_count > 0 ? (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleViewDrafts(item)
+                            }}
+                            className="px-2 py-1 text-xs bg-orange-100 text-orange-700 rounded hover:bg-orange-200 transition-colors flex items-center space-x-1"
+                            title="Edit existing drafts"
+                          >
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                            </svg>
+                            <span>Edit Draft ({item.draft_count})</span>
+                          </button>
+                        ) : (item.feedback_type === 'needs_improvement' || item.feedback_type === 'incorrect') ? (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleCreateArticle(item)
+                            }}
+                            className="px-2 py-1 text-xs bg-green-100 text-green-700 rounded hover:bg-green-200 transition-colors flex items-center space-x-1"
+                            title="Create Knowledge Base Article"
+                          >
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                            </svg>
+                            <span>Create Article</span>
+                          </button>
+                        ) : null}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
 
@@ -712,8 +558,8 @@ const AdminQuestions = () => {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
-                    <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${getFeedbackStatusColor(selectedFeedback.status)}`}>
-                      {formatFeedbackStatus(selectedFeedback.status)}
+                    <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${getFeedbackStatusColor(selectedFeedback.enhanced_status)}`}>
+                      {formatFeedbackStatus(selectedFeedback.enhanced_status)}
                     </span>
                   </div>
                 </div>

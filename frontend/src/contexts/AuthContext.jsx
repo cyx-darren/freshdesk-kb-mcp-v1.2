@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react'
-import { authAPI } from '../services/api'
+import { authService } from '../services/api'
 
 const AuthContext = createContext({})
 
@@ -20,7 +20,7 @@ export const AuthProvider = ({ children }) => {
     const initAuth = async () => {
       if (token) {
         try {
-          const response = await authAPI.getProfile()
+          const response = await authService.getProfile()
           setUser(response.data.user)
         } catch (error) {
           localStorage.removeItem('authToken')
@@ -35,7 +35,7 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (credentials) => {
     try {
-      const response = await authAPI.login(credentials)
+      const response = await authService.login(credentials.email, credentials.password)
       const { token: newToken, user: userData } = response.data
       
       localStorage.setItem('authToken', newToken)
@@ -53,7 +53,7 @@ export const AuthProvider = ({ children }) => {
 
   const register = async (userData) => {
     try {
-      const response = await authAPI.register(userData)
+      const response = await authService.register(userData.email, userData.password)
       return { success: true, data: response.data }
     } catch (error) {
       return { 
