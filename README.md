@@ -28,6 +28,15 @@ freshdesk-kb-mcp-v1.2/
 │   │   └── services/        # API service layer
 │   ├── package.json         # Frontend dependencies
 │   └── env.production       # Production environment variables
+├── discord-bot/             # Discord Bot Service
+│   ├── bot.js               # Main Discord bot implementation
+│   ├── chatService.js       # Backend API integration
+│   ├── rateLimiter.js       # Redis-based rate limiting
+│   ├── healthMonitor.js     # Health monitoring service
+│   ├── logger.js            # Structured logging system
+│   ├── index.js             # Bot service entry point
+│   ├── Dockerfile           # Docker containerization
+│   └── package.json         # Bot dependencies
 ├── mcp-server/              # Model Context Protocol Server
 │   ├── src/                 # MCP implementation
 │   ├── http-wrapper.js      # HTTP wrapper for Railway deployment
@@ -63,6 +72,14 @@ freshdesk-kb-mcp-v1.2/
 - **Search & Retrieval**: Full-text search with article fetching
 - **Caching**: Performance optimization with intelligent caching
 - **Error Handling**: Robust error handling and retries
+
+### 🤖 Discord Bot Service
+- **AI-Powered Assistant**: Claude AI integration for intelligent responses
+- **Multiple Interaction Methods**: Slash commands, mentions, and direct messages
+- **Rich Discord Integration**: Embeds, typing indicators, and interactive buttons
+- **Feedback System**: One-click rating system with analytics
+- **Rate Limiting**: Redis-based protection against spam and abuse
+- **Health Monitoring**: Comprehensive metrics and uptime tracking
 
 ## 🚀 Deployment
 
@@ -135,6 +152,22 @@ npm install
 # Runs on http://localhost:3000 (HTTP wrapper)
    ```
 
+### Discord Bot Setup
+   ```bash
+# Navigate to Discord bot
+cd discord-bot
+
+# Install dependencies
+npm install
+
+# Create local environment file
+cp .env.example .env
+
+# Start development server
+npm run dev
+# Connects to Discord and backend API
+   ```
+
 ## 📡 API Endpoints
 
 ### Public Endpoints
@@ -176,17 +209,30 @@ FRESHDESK_DOMAIN=your-domain.freshdesk.com
 FRESHDESK_API_KEY=your-api-key
 ```
 
+### Discord Bot (`discord-bot/env.production`)
+```env
+DISCORD_BOT_TOKEN=your-discord-bot-token
+BACKEND_URL=https://your-backend.railway.app
+REDIS_HOST=your-redis-host
+REDIS_PORT=6379
+RATE_LIMIT_ENABLED=true
+RATE_LIMIT_MAX_REQUESTS=30
+RATE_LIMIT_WINDOW_MS=60000
+```
+
 ## 🏗️ Architecture
 
 ### Development Mode
 - **Frontend**: Vite dev server (port 3000)
 - **Backend**: Express server (port 3333)
 - **MCP**: Direct stdio communication
+- **Discord Bot**: Standalone Node.js service
 
 ### Production Mode
 - **Frontend**: Static build on Vercel
 - **Backend**: Express server on Railway
 - **MCP**: HTTP wrapper on Railway (internal communication)
+- **Discord Bot**: Containerized service on Railway
 
 ## 🔐 Security Features
 
