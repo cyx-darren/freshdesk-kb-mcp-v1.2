@@ -70,7 +70,7 @@ Please provide a helpful answer based on the information above. Remember to cite
     
     // Make request to Claude with enhanced parameters to match Claude Desktop experience
     const response = await anthropic.messages.create({
-      model: 'claude-3-5-sonnet-20241022',
+      model: 'claude-sonnet-4-20250514',
       max_tokens: 4000,  // Increased for more detailed responses
       temperature: 0.5,  // Slightly higher for more comprehensive answers
       system: finalSystemPrompt,
